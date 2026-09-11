@@ -29,6 +29,7 @@ export interface BotStatus {
     tag: string | null;
     ping: number | null;
     hasToken: boolean;
+    region?: string;
   };
   currentGuild: { id: string; name: string } | null;
   guilds: Array<{ id: string; name: string; memberCount?: number }>;

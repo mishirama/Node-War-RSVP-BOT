@@ -98,9 +98,25 @@ export const Header: React.FC<HeaderProps> = ({
                     • Guild: <strong className="text-slate-300">{status.currentGuild.name}</strong>
                   </span>
                 )}
-                {isOnline && status?.bot.ping !== null && (
-                  <span className="hidden sm:inline-block text-slate-500">
-                    • {status.bot.ping}ms
+                {isOnline && status?.bot.ping !== null && status.bot.ping >= 0 && (
+                  <span
+                    className="hidden sm:inline-flex items-center gap-1 text-slate-500 cursor-help"
+                    title={`Discord Gateway Heartbeat RTT: ${status.bot.ping}ms.\nHosted in: ${status.bot.region || 'asia-southeast1 (Singapore)'} connecting to Discord US Gateway.\nTip: Deploying container in a US region (e.g. us-east1) reduces ping to 20-50ms.`}
+                  >
+                    • Gateway Ping:
+                    <span
+                      className={`font-mono font-medium ${
+                        status.bot.ping < 100
+                          ? 'text-emerald-400'
+                          : status.bot.ping < 200
+                          ? 'text-lime-400'
+                          : status.bot.ping < 300
+                          ? 'text-amber-400'
+                          : 'text-rose-400'
+                      }`}
+                    >
+                      {status.bot.ping}ms
+                    </span>
                   </span>
                 )}
               </div>

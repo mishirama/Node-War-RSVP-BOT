@@ -177,13 +177,31 @@ export class RSVPSession {
     return rows;
   }
 
-  async batchUpdateDiscord() {
-    if (!this.client?.isReady || !this.client.isReady()) {
-      this.saveState();
+  private _updateTimer: NodeJS.Timeout | null = null;
+  private _updatePending = false;
+  private _updateInFlight = false;
+
+  triggerDiscordUpdate(delayMs = 100) {
+    this._updatePending = true;
+    if (this._updateTimer) clearTimeout(this._updateTimer);
+    this._updateTimer = setTimeout(() => {
+      this._updateTimer = null;
+      this._flushDiscordUpdate().catch(() => {});
+    }, delayMs);
+  }
+
+  private async _flushDiscordUpdate() {
+    if (this._updateInFlight) {
       return;
     }
-    await new Promise((r) => setTimeout(r, 1200));
+    this._updateInFlight = true;
+    this._updatePending = false;
+
     try {
+      if (!this.client?.isReady || !this.client.isReady()) {
+        this.saveState();
+        return;
+      }
       const { mainEmb, waitEmb } = this.buildEmbeds();
       const channelId = String(
         this.sessionType === 'siege' ? CONFIG.SIEGE_CHANNEL_ID || '0' : CONFIG.CHANNEL_ID || '0'
@@ -230,8 +248,15 @@ export class RSVPSession {
     } catch (e) {
       log('ERROR', `Batch update failed: ${e}`);
     } finally {
-      this._updateRunning = false;
+      this._updateInFlight = false;
+      if (this._updatePending) {
+        this.triggerDiscordUpdate(50);
+      }
     }
+  }
+
+  async batchUpdateDiscord() {
+    this.triggerDiscordUpdate(100);
   }
 
   async processRoleSelection(interaction: ButtonInteraction, role: string) {
@@ -276,10 +301,7 @@ export class RSVPSession {
       }
     }
 
-    if (!this._updateRunning) {
-      this._updateRunning = true;
-      this.batchUpdateDiscord();
-    }
+    this.triggerDiscordUpdate(100);
   }
 
   // Programmatic assignment from Web UI

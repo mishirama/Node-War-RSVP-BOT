@@ -34,6 +34,15 @@ export const client: any = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
   ],
+  sweepers: {
+    messages: {
+      interval: 300,
+      lifetime: 900,
+    },
+  },
+  rest: {
+    timeout: 15000,
+  },
 });
 
 client.mainMsg = null;

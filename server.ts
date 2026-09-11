@@ -85,8 +85,9 @@ async function startServer() {
       bot: {
         isReady: isBotReady,
         tag: isBotReady ? client.user?.tag : null,
-        ping: isBotReady ? client.ws?.ping : null,
+        ping: isBotReady && typeof client.ws?.ping === 'number' && client.ws.ping >= 0 ? client.ws.ping : null,
         hasToken: Boolean(process.env.DISCORD_TOKEN),
+        region: 'asia-southeast1 (Singapore)',
       },
       currentGuild: guild ? { id: guild.id, name: guild.name } : null,
       guilds: guildsList,
