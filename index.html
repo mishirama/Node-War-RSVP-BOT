@@ -9,6 +9,34 @@
     <meta property="og:description" content="Discord RSVP bot and guild command center for Black Desert Online Node War & Siege War roster planning, slot management, and notifications." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      // Gracefully prevent unhandled rejection overlays from Vite HMR websocket drops in iframe preview
+      window.addEventListener('unhandledrejection', function (event) {
+        var reason = event && event.reason;
+        var msg = (reason && (reason.message || String(reason))) || '';
+        if (
+          msg.includes('WebSocket closed without opened') ||
+          msg.includes('failed to connect to websocket')
+        ) {
+          event.preventDefault();
+          if (typeof event.stopImmediatePropagation === 'function') {
+            event.stopImmediatePropagation();
+          }
+        }
+      }, true);
+      window.addEventListener('error', function (event) {
+        var msg = (event && (event.message || String(event))) || '';
+        if (
+          msg.includes('WebSocket closed without opened') ||
+          msg.includes('[vite] failed to connect to websocket')
+        ) {
+          event.preventDefault();
+          if (typeof event.stopImmediatePropagation === 'function') {
+            event.stopImmediatePropagation();
+          }
+        }
+      }, true);
+    </script>
   </head>
   <body>
     <div id="root"></div>

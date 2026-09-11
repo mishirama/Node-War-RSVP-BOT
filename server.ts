@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
@@ -35,6 +36,7 @@ dotenv.config();
 
 async function startServer() {
   const app = express();
+  const server = http.createServer(app);
   const PORT = 3000;
 
   app.use(express.json());
@@ -128,6 +130,17 @@ async function startServer() {
         }
       }
       saveConfig();
+
+      // Refresh limits and sync embeds on active sessions
+      if (client.siegeSession) {
+        client.siegeSession.limits = getSiegeLimits();
+        client.siegeSession.batchUpdateDiscord().catch(() => {});
+      }
+      if (client.currentSession) {
+        client.currentSession.limits = getLimits(client.currentSession.targetDate);
+        client.currentSession.batchUpdateDiscord().catch(() => {});
+      }
+
       const warnings = getCapacityWarnings();
       log('CONFIG', 'Configuration updated from dashboard.');
       res.json({ success: true, config: CONFIG, warnings });
@@ -308,7 +321,12 @@ async function startServer() {
   // --- VITE DEV / PRODUCTION STATIC FALLBACK ---
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: {
+          server,
+        },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -321,7 +339,7 @@ async function startServer() {
   }
 
   // --- START SERVER & DISCORD CLIENT ---
-  app.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, '0.0.0.0', () => {
     log('WEB', `Command center dashboard running at http://0.0.0.0:${PORT}`);
   });
 

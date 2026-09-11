@@ -1,111 +1,243 @@
 {
-  "target_date": "2026-09-10",
-  "is_closed": false,
-  "data": {
-    "Builder": [],
-    "Elephant": [],
-    "Flag": [
-      "[RB] Killua"
-    ],
-    "FT": [],
-    "Hwacha": [
-      "[RB] Touwa"
-    ],
-    "Shai": [
-      "[TC] Six7",
-      "[RB] Shai God"
-    ],
-    "Shotcaller": [],
-    "Witch/Wizard": [
-      "[Ego] Mishirama"
-    ],
-    "Main Ball": [
-      "[RB] Sherzinger",
-      "[TC] Alexis",
-      "[TC] forget",
-      "[TC] Shigeruu",
-      "[RB] BlekMgicLoli",
-      "[RB] Hilmanh",
-      "[TC] Pwincess Mayve",
-      "[RB] Sangmane",
-      "[TC] Eocene",
-      "[RB] Gestella",
-      "[RB] Urva",
-      "[RB] Reflesh",
-      "[RB] Rizky",
-      "[RB] Armoun",
-      "[TC]Hiiro",
-      "[TC] TeeRaw",
-      "[RB] Hizume",
-      "[TC] Reindl",
-      "[TC] WeiQian",
-      "[TC] Diangod"
-    ]
-  },
-  "waitlist": {
-    "Builder": [],
-    "Elephant": [],
-    "Flag": [],
-    "FT": [],
-    "Hwacha": [],
-    "Shai": [],
-    "Shotcaller": [],
-    "Witch/Wizard": [],
-    "Main Ball": []
-  },
-  "member_data": {
-    "Builder": [],
-    "Elephant": [],
-    "Flag": [
-      { "id": "131982674595151873", "name": "[RB] Killua" }
-    ],
-    "FT": [],
-    "Hwacha": [
-      { "id": "222001477156208640", "name": "[RB] Touwa" }
-    ],
-    "Shai": [
-      { "id": "602872096623951885", "name": "[TC] Six7" },
-      { "id": "349879299341287434", "name": "[RB] Shai God" }
-    ],
-    "Shotcaller": [],
-    "Witch/Wizard": [
-      { "id": "400613792825999360", "name": "[Ego] Mishirama" }
-    ],
-    "Main Ball": [
-      { "id": "254914458445545472", "name": "[RB] Sherzinger" },
-      { "id": "365458687923322892", "name": "[TC] Alexis" },
-      { "id": "412268817972985856", "name": "[TC] forget" },
-      { "id": "397029946792607745", "name": "[TC] Shigeruu" },
-      { "id": "901762532371497010", "name": "[RB] BlekMgicLoli" },
-      { "id": "424509666660188170", "name": "[RB] Hilmanh" },
-      { "id": "438245294094811137", "name": "[TC] Pwincess Mayve" },
-      { "id": "388569184952647680", "name": "[RB] Sangmane" },
-      { "id": "407518710069460994", "name": "[TC] Eocene" },
-      { "id": "232140750178091018", "name": "[RB] Gestella" },
-      { "id": "670525910612574220", "name": "[RB] Urva" },
-      { "id": "414087519899090970", "name": "[RB] Reflesh" },
-      { "id": "302235677393944578", "name": "[RB] Rizky" },
-      { "id": "275902037659746304", "name": "[RB] Armoun" },
-      { "id": "318300403055984640", "name": "[TC]Hiiro" },
-      { "id": "442127564698288139", "name": "[TC] TeeRaw" },
-      { "id": "685907488528138305", "name": "[RB] Hizume" },
-      { "id": "1401183553651343485", "name": "[TC] Reindl" },
-      { "id": "471217316764319746", "name": "[TC] WeiQian" },
-      { "id": "152435092868825088", "name": "[TC] Diangod" }
-    ]
-  },
-  "member_waitlist": {
-    "Builder": [],
-    "Elephant": [],
-    "Flag": [],
-    "FT": [],
-    "Hwacha": [],
-    "Shai": [],
-    "Shotcaller": [],
-    "Witch/Wizard": [],
-    "Main Ball": []
-  },
-  "session_type": "siege",
-  "main_msg_id": "1547631650442321951",
-  "waitlist_msg_id": "1547631656041586709"
+    "target_date": "2026-09-11",
+    "is_closed": false,
+    "data": {
+        "Builder": [
+            "[Ego] Mishirama"
+        ],
+        "Elephant": [],
+        "Flag": [],
+        "FT": [
+            "[RB] Urva",
+            "[Ego] JAKUT"
+        ],
+        "Hwacha": [
+            "[TC] Alexis"
+        ],
+        "Shai": [
+            "[TC]Geekay"
+        ],
+        "Shotcaller": [],
+        "Witch/Wizard": [],
+        "Main Ball": [
+            "[Ego] Bennieee",
+            "[TC] Katochimoto",
+            "[TC] MysstBDO",
+            "[TC] Voxirus",
+            "[TC] Basement50mgTren",
+            "[TC] JaHaoBee",
+            "[RB] Sangmane",
+            "[RB] Vatu",
+            "[RB] Rizky",
+            "[RB] AoimamaKun",
+            "[TC] MANON",
+            "[RB] Mewrah",
+            "[RB] BlekMgicLoli",
+            "[RB] Zamharin",
+            "[Ego] Polished",
+            "[Ego] Apin from Ego not RB",
+            "[RB] Sherzinger",
+            "[TC] Reindl",
+            "[TC] Pwincess Mayve",
+            "[TC] Magie",
+            "[TC] Eocene",
+            "[TC] Shigeruu",
+            "[TC] Diangod",
+            "[TC] TeeRaw",
+            "[RB] Wujincul",
+            "[RB] MinessotaJR",
+            "[TC] Kayatadude",
+            "[RB] Hilmanh",
+            "[TC]Hiiro",
+            "[RB] Gestella"
+        ]
+    },
+    "waitlist": {
+        "Builder": [],
+        "Elephant": [],
+        "Flag": [],
+        "FT": [],
+        "Hwacha": [
+            "[RB] Touwa"
+        ],
+        "Shai": [],
+        "Shotcaller": [],
+        "Witch/Wizard": [],
+        "Main Ball": []
+    },
+    "member_data": {
+        "Builder": [
+            {
+                "id": "400613792825999360",
+                "name": "[Ego] Mishirama"
+            }
+        ],
+        "Elephant": [],
+        "Flag": [],
+        "FT": [
+            {
+                "id": "legacy-1789135386435-0.1457976949103863",
+                "name": "[RB] Urva"
+            },
+            {
+                "id": "legacy-1789135386435-0.379868146430828",
+                "name": "[Ego] JAKUT"
+            }
+        ],
+        "Hwacha": [
+            {
+                "id": "legacy-1789135386435-0.25513983016762665",
+                "name": "[TC] Alexis"
+            }
+        ],
+        "Shai": [
+            {
+                "id": "legacy-1789135386435-0.7662404646536349",
+                "name": "[TC]Geekay"
+            }
+        ],
+        "Shotcaller": [],
+        "Witch/Wizard": [],
+        "Main Ball": [
+            {
+                "id": "272399241865854977",
+                "name": "[Ego] Bennieee"
+            },
+            {
+                "id": "legacy-1789135386435-0.3252824913700172",
+                "name": "[TC] Katochimoto"
+            },
+            {
+                "id": "legacy-1789135386435-0.5113376425537954",
+                "name": "[TC] MysstBDO"
+            },
+            {
+                "id": "legacy-1789135386435-0.12674331004546668",
+                "name": "[TC] Voxirus"
+            },
+            {
+                "id": "160515080599896065",
+                "name": "[TC] Basement50mgTren"
+            },
+            {
+                "id": "legacy-1789135386436-0.8822304868694495",
+                "name": "[TC] JaHaoBee"
+            },
+            {
+                "id": "legacy-1789135386436-0.8692660506786642",
+                "name": "[RB] Sangmane"
+            },
+            {
+                "id": "legacy-1789135386436-0.05213382189930904",
+                "name": "[RB] Vatu"
+            },
+            {
+                "id": "legacy-1789135386436-0.6648182244415692",
+                "name": "[RB] Rizky"
+            },
+            {
+                "id": "legacy-1789135386436-0.5458054751226862",
+                "name": "[RB] AoimamaKun"
+            },
+            {
+                "id": "legacy-1789135386436-0.15574229058759848",
+                "name": "[TC] MANON"
+            },
+            {
+                "id": "legacy-1789135386436-0.35974632971796106",
+                "name": "[RB] Mewrah"
+            },
+            {
+                "id": "legacy-1789135386436-0.7875525589840426",
+                "name": "[RB] BlekMgicLoli"
+            },
+            {
+                "id": "legacy-1789135386436-0.9554348443970517",
+                "name": "[RB] Zamharin"
+            },
+            {
+                "id": "legacy-1789135386436-0.5426361224968335",
+                "name": "[Ego] Polished"
+            },
+            {
+                "id": "legacy-1789135386436-0.30672004119032303",
+                "name": "[Ego] Apin from Ego not RB"
+            },
+            {
+                "id": "legacy-1789135386436-0.014516327457745781",
+                "name": "[RB] Sherzinger"
+            },
+            {
+                "id": "legacy-1789135386436-0.27044821160664423",
+                "name": "[TC] Reindl"
+            },
+            {
+                "id": "legacy-1789135386436-0.16247098851611996",
+                "name": "[TC] Pwincess Mayve"
+            },
+            {
+                "id": "legacy-1789135386436-0.5044640216784819",
+                "name": "[TC] Magie"
+            },
+            {
+                "id": "407518710069460994",
+                "name": "[TC] Eocene"
+            },
+            {
+                "id": "legacy-1789135386436-0.9045606279691403",
+                "name": "[TC] Shigeruu"
+            },
+            {
+                "id": "legacy-1789135386436-0.84899278152175",
+                "name": "[TC] Diangod"
+            },
+            {
+                "id": "legacy-1789135386436-0.16452432649479354",
+                "name": "[TC] TeeRaw"
+            },
+            {
+                "id": "401680035003498499",
+                "name": "[RB] Wujincul"
+            },
+            {
+                "id": "112826009660694528",
+                "name": "[RB] MinessotaJR"
+            },
+            {
+                "id": "159440855768236032",
+                "name": "[TC] Kayatadude"
+            },
+            {
+                "id": "424509666660188170",
+                "name": "[RB] Hilmanh"
+            },
+            {
+                "id": "318300403055984640",
+                "name": "[TC]Hiiro"
+            },
+            {
+                "id": "232140750178091018",
+                "name": "[RB] Gestella"
+            }
+        ]
+    },
+    "member_waitlist": {
+        "Builder": [],
+        "Elephant": [],
+        "Flag": [],
+        "FT": [],
+        "Hwacha": [
+            {
+                "id": "222001477156208640",
+                "name": "[RB] Touwa"
+            }
+        ],
+        "Shai": [],
+        "Shotcaller": [],
+        "Witch/Wizard": [],
+        "Main Ball": []
+    },
+    "session_type": "siege",
+    "main_msg_id": "1547966965522374707",
+    "waitlist_msg_id": null
 }

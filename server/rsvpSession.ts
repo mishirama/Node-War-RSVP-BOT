@@ -8,6 +8,7 @@ import {
   ButtonInteraction,
   Client,
   Message,
+  MessageFlags,
 } from 'discord.js';
 import { CONFIG, DATA_FILE, log } from './config.js';
 import { ROLE_EMOJIS, DAY_KEYS, ROLE_BUTTONS, formatDiscordRoleEmoji } from './constants.js';
@@ -112,12 +113,50 @@ export class RSVPSession {
 
     for (const [role, users] of Object.entries(this.data)) {
       const limit = this.limits[role] ?? 0;
-      mainEmb.addFields({
-        name: `${formatDiscordRoleEmoji(role)} ${role} (${users.length}/${limit})`,
-        value: users.length ? users.map((u) => `• ${u}`).join('\n') : '-',
-        inline: true,
+      if (!users.length) {
+        mainEmb.addFields({
+          name: `${formatDiscordRoleEmoji(role)} ${role} (0/${limit})`,
+          value: '-',
+          inline: true,
+        });
+        continue;
+      }
+
+      // Group users into chunks so that no single field value exceeds 900 characters
+      // (Discord limit is 1024 characters per field value)
+      const userChunks: string[][] = [];
+      let currentChunk: string[] = [];
+      let currentLen = 0;
+
+      for (const u of users) {
+        const line = `• ${u}`;
+        if (currentChunk.length > 0 && currentLen + line.length + 1 > 900) {
+          userChunks.push(currentChunk);
+          currentChunk = [line];
+          currentLen = line.length;
+        } else {
+          currentChunk.push(line);
+          currentLen += line.length + 1;
+        }
+      }
+      if (currentChunk.length > 0) {
+        userChunks.push(currentChunk);
+      }
+
+      userChunks.forEach((chunk, chunkIdx) => {
+        const fieldName =
+          chunkIdx === 0
+            ? `${formatDiscordRoleEmoji(role)} ${role} (${users.length}/${limit})`
+            : `${formatDiscordRoleEmoji(role)} ${role} (Cont. ${chunkIdx + 1})`;
+
+        mainEmb.addFields({
+          name: fieldName,
+          value: chunk.join('\n'),
+          inline: true,
+        });
       });
     }
+
     const totalReg = Object.values(this.data).reduce((a, arr) => a + arr.length, 0);
     mainEmb.addFields({
       name: '📊 Summary',
@@ -128,17 +167,50 @@ export class RSVPSession {
     const anyWaitlist = Object.values(this.waitlist).some((arr) => arr.length);
     const waitEmb = new EmbedBuilder()
       .setTitle('📋 Waitlist / Backups')
-      .setColor(0xfaa61a)
-      .setDescription(anyWaitlist ? '' : 'No backups currently in queue.');
+      .setColor(0xfaa61a);
+
+    if (anyWaitlist) {
+      waitEmb.setDescription('Players currently in backup queue:');
+    } else {
+      waitEmb.setDescription('No backups currently in queue.');
+    }
+
     for (const [role, users] of Object.entries(this.waitlist)) {
-      if (users.length) {
+      if (!users.length) continue;
+
+      const userChunks: string[][] = [];
+      let currentChunk: string[] = [];
+      let currentLen = 0;
+
+      for (const u of users) {
+        const line = `• ${u}`;
+        if (currentChunk.length > 0 && currentLen + line.length + 1 > 900) {
+          userChunks.push(currentChunk);
+          currentChunk = [line];
+          currentLen = line.length;
+        } else {
+          currentChunk.push(line);
+          currentLen += line.length + 1;
+        }
+      }
+      if (currentChunk.length > 0) {
+        userChunks.push(currentChunk);
+      }
+
+      userChunks.forEach((chunk, chunkIdx) => {
+        const fieldName =
+          chunkIdx === 0
+            ? `${formatDiscordRoleEmoji(role)} ${role} Backups (${users.length})`
+            : `${formatDiscordRoleEmoji(role)} ${role} Backups (Cont. ${chunkIdx + 1})`;
+
         waitEmb.addFields({
-          name: `${formatDiscordRoleEmoji(role)} ${role} Backups (${users.length})`,
-          value: users.map((u) => `• ${u}`).join('\n'),
+          name: fieldName,
+          value: chunk.join('\n'),
           inline: true,
         });
-      }
+      });
     }
+
     return { mainEmb, waitEmb };
   }
 
@@ -181,7 +253,7 @@ export class RSVPSession {
   private _updatePending = false;
   private _updateInFlight = false;
 
-  triggerDiscordUpdate(delayMs = 100) {
+  triggerDiscordUpdate(delayMs = 750) {
     this._updatePending = true;
     if (this._updateTimer) clearTimeout(this._updateTimer);
     this._updateTimer = setTimeout(() => {
@@ -219,7 +291,7 @@ export class RSVPSession {
             this.client[mainMsgKey] = await ch.messages
               .fetch(this.client[mainMsgIdKey])
               .catch((e: any) => {
-                log('ERROR', `Failed to fetch main message: ${e}`);
+                log('WARN', `Could not fetch main message ${this.client[mainMsgIdKey]}: ${e?.message || e}`);
                 return null;
               });
           }
@@ -227,7 +299,7 @@ export class RSVPSession {
             this.client[waitlistMsgKey] = await ch.messages
               .fetch(this.client[waitlistMsgIdKey])
               .catch((e: any) => {
-                log('ERROR', `Failed to fetch waitlist message: ${e}`);
+                log('WARN', `Could not fetch waitlist message ${this.client[waitlistMsgIdKey]}: ${e?.message || e}`);
                 return null;
               });
           }
@@ -238,10 +310,23 @@ export class RSVPSession {
       const waitlistMsg = this.client[this.messageKey('waitlistMsg')];
 
       if (mainMsg) {
-        await mainMsg.edit({ embeds: [mainEmb], components: this.buildComponents() });
+        await mainMsg.edit({ embeds: [mainEmb], components: this.buildComponents() }).catch((err: any) => {
+          log('ERROR', `Failed to edit main message: ${err?.message || err}`);
+          if (err?.code === 10008) {
+            // Message was deleted or invalid; clear stale cache
+            this.client[this.messageKey('mainMsg')] = null;
+            this.client[this.messageKey('mainMsgId')] = null;
+          }
+        });
       }
       if (waitlistMsg) {
-        await waitlistMsg.edit({ embeds: [waitEmb] });
+        await waitlistMsg.edit({ embeds: [waitEmb] }).catch((err: any) => {
+          log('ERROR', `Failed to edit waitlist message: ${err?.message || err}`);
+          if (err?.code === 10008) {
+            this.client[this.messageKey('waitlistMsg')] = null;
+            this.client[this.messageKey('waitlistMsgId')] = null;
+          }
+        });
       }
       this.saveState();
       log('SUCCESS', `RSVP Embeds updated on Discord for ${this.sessionType}.`);
@@ -250,20 +335,31 @@ export class RSVPSession {
     } finally {
       this._updateInFlight = false;
       if (this._updatePending) {
-        this.triggerDiscordUpdate(50);
+        this.triggerDiscordUpdate(750);
       }
     }
   }
 
   async batchUpdateDiscord() {
-    this.triggerDiscordUpdate(100);
+    this.triggerDiscordUpdate(300);
   }
 
   async processRoleSelection(interaction: ButtonInteraction, role: string) {
-    if (this.isClosed) return;
-    await interaction.deferUpdate();
+    if (this.isClosed) {
+      await interaction.followUp({
+        content: '🔒 This RSVP is currently closed.',
+        flags: MessageFlags.Ephemeral,
+      }).catch(() => {});
+      return;
+    }
+
+    // Ensure interaction is acknowledged immediately
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferUpdate().catch(() => {});
+    }
+
     const user = (interaction.member as any)?.displayName || interaction.user.username;
-    const member = { id: interaction.user.id, name: user };
+    const member: MemberRecord = { id: interaction.user.id, name: user };
 
     // Remove from existing roles
     for (const r of Object.keys(this.limits)) {
@@ -287,6 +383,7 @@ export class RSVPSession {
       }
     }
 
+    let isWaitlisted = false;
     if (role !== 'Cancel') {
       if (this.data[role].length < (this.limits[role] || 0)) {
         this.data[role].push(user);
@@ -294,14 +391,21 @@ export class RSVPSession {
       } else {
         this.waitlist[role].push(user);
         this.memberWaitlist[role].push(member);
-        await interaction.followUp({
-          content: `⚠️ ${role} full! Handled into Waitlist.`,
-          ephemeral: true,
-        }).catch(() => {});
+        isWaitlisted = true;
       }
     }
 
-    this.triggerDiscordUpdate(100);
+    // Persist immediately so state is never lost even if Discord edit is delayed
+    this.saveState();
+
+    if (isWaitlisted) {
+      await interaction.followUp({
+        content: `⚠️ ${role} is full! You have been placed into the Waitlist / Backup queue.`,
+        flags: MessageFlags.Ephemeral,
+      }).catch(() => {});
+    }
+
+    this.triggerDiscordUpdate(750);
   }
 
   // Programmatic assignment from Web UI

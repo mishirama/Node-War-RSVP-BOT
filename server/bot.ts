@@ -170,6 +170,11 @@ export async function postRSVP() {
   client.currentSession = session;
 
   if (client.isReady && client.isReady()) {
+    // If an existing post was in channel, remove its buttons to prevent stale clicks
+    if (client.mainMsg) {
+      await client.mainMsg.edit({ components: [] }).catch(() => {});
+    }
+
     const ch = await client.channels.fetch(String(CONFIG.CHANNEL_ID || '0')).catch(() => null);
     if (ch && ch.isTextBased()) {
       const { mainEmb, waitEmb } = session.buildEmbeds();
@@ -208,6 +213,11 @@ export async function postSiege() {
   client.siegeSession = session;
 
   if (client.isReady && client.isReady()) {
+    // If an existing siege post was in channel, remove its buttons to prevent stale clicks
+    if (client.siegeMainMsg) {
+      await client.siegeMainMsg.edit({ components: [] }).catch(() => {});
+    }
+
     const channel = await client.channels.fetch(String(CONFIG.SIEGE_CHANNEL_ID || '0')).catch(() => null);
     if (channel && channel.isTextBased()) {
       const { mainEmb, waitEmb } = session.buildEmbeds();
@@ -489,12 +499,36 @@ export function startScheduler() {
 }
 
 // Bot event registrations
-client.once(Events.ClientReady, () => {
+client.once(Events.ClientReady, async () => {
   log('INFO', `Discord Bot logged in as ${client.user?.tag}`);
   registerSlashCommands().catch((error) => log('ERROR', `Could not register slash commands: ${error}`));
   restoreState();
   restoreState(SIEGE_DATA_FILE, 'siegeSession', 'siege');
   startScheduler();
+
+  // Pre-fetch messages so client.mainMsg and client.siegeMainMsg are live in memory
+  try {
+    if (CONFIG.CHANNEL_ID && client.mainMsgId) {
+      const ch = await client.channels.fetch(String(CONFIG.CHANNEL_ID)).catch(() => null);
+      if (ch && ch.isTextBased()) {
+        client.mainMsg = await ch.messages.fetch(client.mainMsgId).catch(() => null);
+        if (client.waitlistMsgId) {
+          client.waitlistMsg = await ch.messages.fetch(client.waitlistMsgId).catch(() => null);
+        }
+      }
+    }
+    if (CONFIG.SIEGE_CHANNEL_ID && client.siegeMainMsgId) {
+      const sCh = await client.channels.fetch(String(CONFIG.SIEGE_CHANNEL_ID)).catch(() => null);
+      if (sCh && sCh.isTextBased()) {
+        client.siegeMainMsg = await sCh.messages.fetch(client.siegeMainMsgId).catch(() => null);
+        if (client.siegeWaitlistMsgId) {
+          client.siegeWaitlistMsg = await sCh.messages.fetch(client.siegeWaitlistMsgId).catch(() => null);
+        }
+      }
+    }
+  } catch (e) {
+    log('WARN', `Could not pre-fetch messages on ready: ${e}`);
+  }
 });
 
 client.on(Events.InteractionCreate, async (interaction: any) => {
@@ -519,15 +553,76 @@ client.on(Events.InteractionCreate, async (interaction: any) => {
     }
 
     if (!interaction.isButton()) return;
+
+    // Fast-acknowledge within 50ms to strictly prevent Discord 3-second timeout
+    try {
+      if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferUpdate();
+      }
+    } catch (e) {
+      log('WARN', `Could not defer button interaction immediately: ${e}`);
+    }
+
     const role = CUSTOM_ID_TO_ROLE[interaction.customId];
-    if (!role) return;
-    const session =
-      interaction.message.id === client.mainMsgId
-        ? client.currentSession
-        : interaction.message.id === client.siegeMainMsgId
-        ? client.siegeSession
-        : null;
-    if (!session) return;
+    if (!role) {
+      log('WARN', `Button customId ${interaction.customId} not recognized in CUSTOM_ID_TO_ROLE`);
+      await interaction.followUp({ content: '⚠️ Unknown RSVP option.', flags: MessageFlags.Ephemeral }).catch(() => {});
+      return;
+    }
+
+    // Smart session resolution
+    let session: RSVPSession | null = null;
+    let isSiege = false;
+
+    if (interaction.message.id === client.mainMsgId) {
+      session = client.currentSession;
+      isSiege = false;
+    } else if (interaction.message.id === client.siegeMainMsgId) {
+      session = client.siegeSession;
+      isSiege = true;
+    } else if (interaction.channelId === CONFIG.SIEGE_CHANNEL_ID || interaction.customId === 'rsvp_witch_wizard') {
+      session = client.siegeSession;
+      isSiege = true;
+    } else if (interaction.channelId === CONFIG.CHANNEL_ID) {
+      session = client.currentSession;
+      isSiege = false;
+    } else {
+      const title = interaction.message.embeds?.[0]?.title || '';
+      if (title.toLowerCase().includes('siege')) {
+        session = client.siegeSession;
+        isSiege = true;
+      } else if (title.toLowerCase().includes('node')) {
+        session = client.currentSession;
+        isSiege = false;
+      } else {
+        session = client.currentSession || client.siegeSession;
+        isSiege = session === client.siegeSession;
+      }
+    }
+
+    if (!session) {
+      await interaction.followUp({
+        content: '⚠️ This RSVP session is no longer active. Please check the latest announcement.',
+        flags: MessageFlags.Ephemeral,
+      }).catch(() => {});
+      return;
+    }
+
+    // Dynamic message re-anchoring: update client message reference to the exact message the user clicked
+    if (isSiege) {
+      if (client.siegeMainMsgId !== interaction.message.id) {
+        client.siegeMainMsg = interaction.message;
+        client.siegeMainMsgId = interaction.message.id;
+        session.saveState();
+      }
+    } else {
+      if (client.mainMsgId !== interaction.message.id) {
+        client.mainMsg = interaction.message;
+        client.mainMsgId = interaction.message.id;
+        session.saveState();
+      }
+    }
+
     await session.processRoleSelection(interaction, role);
   } catch (error) {
     log('ERROR', `Interaction failed: ${error}`);

@@ -101,11 +101,11 @@ export const DEFAULT_SIEGE_ROLE_LIMITS: Record<string, number> = {
   Builder: 1,
   Elephant: 1,
   Flag: 1,
-  FT: 2,
-  Hwacha: 1,
-  Shai: 3,
+  FT: 3,
+  Hwacha: 2,
+  Shai: 5,
   Shotcaller: 1,
-  "Witch/Wizard": 0,
+  "Witch/Wizard": 5,
 };
 
 export const DEFAULT_MAIN_BALL_LIMITS: Record<string, Record<string, number>> = {
