@@ -2,13 +2,29 @@ export const ROLE_EMOJIS: Record<string, string> = {
   "Main Ball": "⚔️",
   Shotcaller: "📢",
   Builder: "🔨",
-  Elephant: "🐘",
-  Flag: "🚩",
-  FT: "🔥",
-  Hwacha: "🏹",
-  Shai: "🎵",
-  "Witch/Wizard": "🧙",
+  Elephant: "1543984913047486545",
+  Flag: "1543984858894704710",
+  FT: "1543984885432062092",
+  Hwacha: "1543984939861803108",
+  Shai: "1544203289393111080",
+  "Witch/Wizard": "1544202932256252167",
+  Witch: "1544202932256252167",
+  Wizard: "1544202904817373224",
 };
+
+export function formatDiscordRoleEmoji(role: string, rawVal?: string): string {
+  const val = rawVal ?? ROLE_EMOJIS[role] ?? '👤';
+  if (role === 'Witch/Wizard' && (val === '🧙' || val === '1544202932256252167')) {
+    return '<:Witch:1544202932256252167><:Wizard:1544202904817373224>';
+  }
+  if (!val) return '👤';
+  const trimmed = String(val).trim();
+  if (/^\d+$/.test(trimmed)) {
+    const cleanRole = role.replace(/[^a-zA-Z0-9_]/g, '') || 'emoji';
+    return `<:${cleanRole}:${trimmed}>`;
+  }
+  return trimmed;
+}
 
 export const DAY_KEYS: Record<number, string> = {
   0: "SUN",
@@ -20,26 +36,26 @@ export const DAY_KEYS: Record<number, string> = {
 };
 
 export const ROLE_BUTTONS = [
-  { role: "Main Ball", customId: "rsvp_main", emoji: "⚔️" },
-  { role: "Builder", customId: "rsvp_builder", emoji: "🔨" },
-  { role: "Elephant", customId: "rsvp_elephant", emoji: "🐘" },
-  { role: "Flag", customId: "rsvp_flag", emoji: "🚩" },
-  { role: "FT", customId: "rsvp_ft", emoji: "🔥" },
-  { role: "Hwacha", customId: "rsvp_hwacha", emoji: "🏹" },
-  { role: "Shai", customId: "rsvp_shai", emoji: "🎵" },
-  { role: "Shotcaller", customId: "rsvp_shotcaller", emoji: "📢" },
+  { role: "Main Ball", customId: "rsvp_main", emoji: ROLE_EMOJIS["Main Ball"] || "⚔️" },
+  { role: "Builder", customId: "rsvp_builder", emoji: ROLE_EMOJIS["Builder"] || "🔨" },
+  { role: "Elephant", customId: "rsvp_elephant", emoji: ROLE_EMOJIS["Elephant"] || "1543984913047486545" },
+  { role: "Flag", customId: "rsvp_flag", emoji: ROLE_EMOJIS["Flag"] || "1543984858894704710" },
+  { role: "FT", customId: "rsvp_ft", emoji: ROLE_EMOJIS["FT"] || "1543984885432062092" },
+  { role: "Hwacha", customId: "rsvp_hwacha", emoji: ROLE_EMOJIS["Hwacha"] || "1543984939861803108" },
+  { role: "Shai", customId: "rsvp_shai", emoji: ROLE_EMOJIS["Shai"] || "1544203289393111080" },
+  { role: "Shotcaller", customId: "rsvp_shotcaller", emoji: ROLE_EMOJIS["Shotcaller"] || "📢" },
 ];
 
 export const SIEGE_ROLE_BUTTONS = [
-  { role: "Builder", customId: "rsvp_builder", emoji: "🔨" },
-  { role: "Elephant", customId: "rsvp_elephant", emoji: "🐘" },
-  { role: "Flag", customId: "rsvp_flag", emoji: "🚩" },
-  { role: "FT", customId: "rsvp_ft", emoji: "🔥" },
-  { role: "Hwacha", customId: "rsvp_hwacha", emoji: "🏹" },
-  { role: "Shai", customId: "rsvp_shai", emoji: "🎵" },
-  { role: "Shotcaller", customId: "rsvp_shotcaller", emoji: "📢" },
-  { role: "Witch/Wizard", customId: "rsvp_witch_wizard", emoji: "🧙" },
-  { role: "Main Ball", customId: "rsvp_main", emoji: "⚔️" },
+  { role: "Builder", customId: "rsvp_builder", emoji: ROLE_EMOJIS["Builder"] || "🔨" },
+  { role: "Elephant", customId: "rsvp_elephant", emoji: ROLE_EMOJIS["Elephant"] || "1543984913047486545" },
+  { role: "Flag", customId: "rsvp_flag", emoji: ROLE_EMOJIS["Flag"] || "1543984858894704710" },
+  { role: "FT", customId: "rsvp_ft", emoji: ROLE_EMOJIS["FT"] || "1543984885432062092" },
+  { role: "Hwacha", customId: "rsvp_hwacha", emoji: ROLE_EMOJIS["Hwacha"] || "1543984939861803108" },
+  { role: "Shai", customId: "rsvp_shai", emoji: ROLE_EMOJIS["Shai"] || "1544203289393111080" },
+  { role: "Shotcaller", customId: "rsvp_shotcaller", emoji: ROLE_EMOJIS["Shotcaller"] || "📢" },
+  { role: "Witch/Wizard", customId: "rsvp_witch_wizard", emoji: ROLE_EMOJIS["Witch/Wizard"] || "1544202932256252167" },
+  { role: "Main Ball", customId: "rsvp_main", emoji: ROLE_EMOJIS["Main Ball"] || "⚔️" },
 ];
 
 export const CUSTOM_ID_TO_ROLE: Record<string, string> = Object.fromEntries(

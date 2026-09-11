@@ -68,7 +68,14 @@ export const RosterView: React.FC<RosterViewProps> = ({
     for (const role of roles) {
       const users = data[role] || [];
       const limit = limits[role] || 0;
-      const emoji = roleEmojis[role] || '⚔️';
+      const rawEmoji = roleEmojis[role] || '⚔️';
+      let emoji = rawEmoji;
+      if (role === 'Witch/Wizard' && (rawEmoji === '🧙' || rawEmoji === '1544202932256252167')) {
+        emoji = '<:Witch:1544202932256252167><:Wizard:1544202904817373224>';
+      } else if (/^\d+$/.test(rawEmoji.trim())) {
+        const cleanRole = role.replace(/[^a-zA-Z0-9_]/g, '') || 'emoji';
+        emoji = `<:${cleanRole}:${rawEmoji.trim()}>`;
+      }
       lines.push(`${emoji} **${role}** (${users.length}/${limit}):`);
       if (users.length) {
         users.forEach((u) => lines.push(`• ${u}`));
@@ -255,7 +262,6 @@ export const RosterView: React.FC<RosterViewProps> = ({
           const waitlistUsers = waitlist[role] || [];
           const limit = limits[role] || 0;
           const isFull = users.length >= limit;
-          const emoji = roleEmojis[role] || '⚔️';
 
           // Filter by search query
           const filteredUsers = searchQuery

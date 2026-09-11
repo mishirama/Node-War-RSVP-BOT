@@ -10,7 +10,7 @@ import {
   Message,
 } from 'discord.js';
 import { CONFIG, DATA_FILE, log } from './config.js';
-import { ROLE_EMOJIS, DAY_KEYS, ROLE_BUTTONS } from './constants.js';
+import { ROLE_EMOJIS, DAY_KEYS, ROLE_BUTTONS, formatDiscordRoleEmoji } from './constants.js';
 
 export interface MemberRecord {
   id: string;
@@ -113,7 +113,7 @@ export class RSVPSession {
     for (const [role, users] of Object.entries(this.data)) {
       const limit = this.limits[role] ?? 0;
       mainEmb.addFields({
-        name: `${ROLE_EMOJIS[role] || '👤'} ${role} (${users.length}/${limit})`,
+        name: `${formatDiscordRoleEmoji(role)} ${role} (${users.length}/${limit})`,
         value: users.length ? users.map((u) => `• ${u}`).join('\n') : '-',
         inline: true,
       });
@@ -133,7 +133,7 @@ export class RSVPSession {
     for (const [role, users] of Object.entries(this.waitlist)) {
       if (users.length) {
         waitEmb.addFields({
-          name: `${ROLE_EMOJIS[role] || '👤'} ${role} Backups (${users.length})`,
+          name: `${formatDiscordRoleEmoji(role)} ${role} Backups (${users.length})`,
           value: users.map((u) => `• ${u}`).join('\n'),
           inline: true,
         });
@@ -143,14 +143,24 @@ export class RSVPSession {
   }
 
   buildComponents() {
-    const buttons = this.roleButtons.map((b) =>
-      new ButtonBuilder()
+    const buttons = this.roleButtons.map((b) => {
+      const btn = new ButtonBuilder()
         .setCustomId(b.customId)
         .setLabel(b.role)
-        .setEmoji(b.emoji as any)
         .setStyle(ButtonStyle.Primary)
-        .setDisabled(this.isClosed)
-    );
+        .setDisabled(this.isClosed);
+
+      const emojiVal = b.emoji || ROLE_EMOJIS[b.role];
+      if (emojiVal) {
+        const trimmed = typeof emojiVal === 'string' ? emojiVal.trim() : (emojiVal as any).id || '';
+        if (/^\d+$/.test(trimmed)) {
+          btn.setEmoji({ id: trimmed });
+        } else {
+          btn.setEmoji(emojiVal as any);
+        }
+      }
+      return btn;
+    });
     buttons.push(
       new ButtonBuilder()
         .setCustomId('rsvp_cancel')
