@@ -1,0 +1,12 @@
+services:
+  bdo-rsvp-bot:
+    build: .
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - ./config.json:/app/config.json
+      - ./rsvp_data.json:/app/rsvp_data.json
+      - ./siege_data.json:/app/siege_data.json

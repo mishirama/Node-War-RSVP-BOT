@@ -3,7 +3,6 @@ import http from 'http';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
-import { createServer as createViteServer } from 'vite';
 import {
   CONFIG,
   CONFIG_FILE,
@@ -358,24 +357,39 @@ async function startServer() {
     }
   });
 
-  // --- VITE DEV / PRODUCTION STATIC FALLBACK ---
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: {
-        middlewareMode: true,
-        hmr: {
-          server,
-        },
-      },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
+  // --- STATIC / VITE MIDDLEWARE ---
+  const distPath = path.join(process.cwd(), 'dist');
+  const distIndex = path.join(distPath, 'index.html');
+
+  if (process.env.NODE_ENV === 'production' || fs.existsSync(distIndex)) {
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+      app.get('*', (req, res) => {
+        res.sendFile(distIndex);
+      });
+    }
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    try {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: {
+          middlewareMode: true,
+          hmr: {
+            server,
+          },
+        },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    } catch (viteErr) {
+      log('WARN', `Vite dev server could not be started: ${viteErr}`);
+      if (fs.existsSync(distPath)) {
+        app.use(express.static(distPath));
+        app.get('*', (req, res) => {
+          res.sendFile(distIndex);
+        });
+      }
+    }
   }
 
   // --- START SERVER & DISCORD CLIENT ---
