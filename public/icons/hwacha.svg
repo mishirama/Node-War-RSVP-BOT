@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="#FFFFFF">
+  <!-- BDO Hwacha Siege Engine -->
+  <!-- 5 Firing Arrows with sharp triangular tips -->
+  <path d="M 235 15 L 260 65 L 243 65 L 243 145 L 230 145 L 230 65 L 212 65 Z" fill="#FFFFFF" />
+  <path d="M 175 55 L 200 105 L 183 105 L 183 185 L 170 185 L 170 105 L 152 105 Z" transform="rotate(-15 175 120)" fill="#FFFFFF" />
+  <path d="M 125 95 L 150 145 L 133 145 L 133 225 L 120 225 L 120 145 L 102 145 Z" transform="rotate(-25 125 160)" fill="#FFFFFF" />
+  <path d="M 255 75 L 275 120 L 260 120 L 260 195 L 248 195 L 248 120 L 233 120 Z" transform="rotate(10 255 135)" fill="#FFFFFF" />
+  <path d="M 295 110 L 315 155 L 300 155 L 300 225 L 288 225 L 288 155 L 273 155 Z" transform="rotate(20 295 168)" fill="#FFFFFF" />
+  
+  <!-- Angled Carriage Body -->
+  <path d="M 130 205 L 365 105 C 385 97 410 108 418 130 L 430 165 C 438 185 427 210 405 218 L 180 310 Z" fill="#FFFFFF" />
+  <!-- 3 Rivets on top frame -->
+  <circle cx="365" cy="148" r="10" fill="#17191d" />
+  <circle cx="310" cy="172" r="10" fill="#17191d" />
+  <circle cx="255" cy="196" r="10" fill="#17191d" />
+  
+  <!-- Rear Arrow Slots Rack -->
+  <path d="M 360 195 L 435 245 L 405 290 L 330 240 Z" fill="none" stroke="#FFFFFF" stroke-width="12" />
+  <line x1="355" y1="215" x2="425" y2="265" stroke="#FFFFFF" stroke-width="8" />
+  <line x1="345" y1="235" x2="415" y2="285" stroke="#FFFFFF" stroke-width="8" />
+  <line x1="335" y1="255" x2="405" y2="305" stroke="#FFFFFF" stroke-width="8" />
+  <line x1="325" y1="275" x2="395" y2="325" stroke="#FFFFFF" stroke-width="8" />
+  
+  <!-- Support Frame Leg extending to ground -->
+  <path d="M 285 320 L 465 440 C 475 447 482 462 475 474 L 460 495 C 452 505 438 508 428 500 L 255 385 Z" fill="#FFFFFF" />
+  
+  <!-- Rear Handle Peg -->
+  <path d="M 140 245 L 65 295 C 55 302 52 318 60 328 C 68 338 82 340 92 334 L 165 285 Z" fill="#FFFFFF" />
+  <circle cx="55" cy="315" r="14" fill="#FFFFFF" />
+  
+  <!-- Large Spoke Wheel with 10 Spokes -->
+  <g transform="translate(165, 385)">
+    <!-- Outer Rim -->
+    <circle cx="0" cy="0" r="95" fill="none" stroke="#FFFFFF" stroke-width="22" />
+    <!-- Center Hub -->
+    <circle cx="0" cy="0" r="28" fill="#FFFFFF" />
+    <circle cx="0" cy="0" r="14" fill="#17191d" />
+    <!-- 10 Spokes -->
+    <line x1="0" y1="0" x2="0" y2="-95" stroke="#FFFFFF" stroke-width="14" />
+    <line x1="0" y1="0" x2="56" y2="-77" stroke="#FFFFFF" stroke-width="14" />
+    <line x1="0" y1="0" x2="90" y2="-29" stroke="#FFFFFF" stroke-width="14" />
+    <line x1="0" y1="0" x2="90" y2="29" stroke="#FFFFFF" stroke-width="14" />
+    <line x1="0" y1="0" x2="56" y2="77" stroke="#FFFFFF" stroke-width="14" />
+    <line x1="0" y1="0" x2="0" y2="95" stroke="#FFFFFF" stroke-width="14" />
+    <line x1="0" y1="0" x2="-56" y2="77" stroke="#FFFFFF" stroke-width="14" />
+    <line x1="0" y1="0" x2="-90" y2="29" stroke="#FFFFFF" stroke-width="14" />
+    <line x1="0" y1="0" x2="-90" y2="-29" stroke="#FFFFFF" stroke-width="14" />
+    <line x1="0" y1="0" x2="-56" y2="-77" stroke="#FFFFFF" stroke-width="14" />
+  </g>
+</svg>

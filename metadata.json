@@ -1,0 +1,6 @@
+{
+  "name": "BDO Node War & Siege War RSVP Bot",
+  "description": "Discord RSVP bot and guild command center for Black Desert Online Node War & Siege War roster planning, slot management, and notifications.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
