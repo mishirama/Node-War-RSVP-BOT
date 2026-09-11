@@ -506,6 +506,9 @@ client.once(Events.ClientReady, async () => {
   restoreState(SIEGE_DATA_FILE, 'siegeSession', 'siege');
   startScheduler();
 
+  // Sync state with live Discord messages if active
+  syncFromDiscord().catch((e) => log('WARN', `Auto-sync on ready error: ${e?.message || e}`));
+
   // Pre-fetch messages so client.mainMsg and client.siegeMainMsg are live in memory
   try {
     if (CONFIG.CHANNEL_ID && client.mainMsgId) {
@@ -631,6 +634,229 @@ client.on(Events.InteractionCreate, async (interaction: any) => {
     }
   }
 });
+
+function parseEmbedRoleMembers(embed: any): Record<string, string[]> {
+  const result: Record<string, string[]> = {};
+  if (!embed || !embed.fields) return result;
+  for (const field of embed.fields) {
+    let role = null;
+    const name = field.name || '';
+    if (name.includes('Main Ball')) role = 'Main Ball';
+    else if (name.includes('Builder')) role = 'Builder';
+    else if (name.includes('Elephant')) role = 'Elephant';
+    else if (name.includes('Flag')) role = 'Flag';
+    else if (name.includes('FT')) role = 'FT';
+    else if (name.includes('Hwacha')) role = 'Hwacha';
+    else if (name.includes('Shai')) role = 'Shai';
+    else if (name.includes('Shotcaller')) role = 'Shotcaller';
+    else if (name.includes('Witch') || name.includes('Wizard')) role = 'Witch/Wizard';
+
+    if (!role) continue;
+    const lines = String(field.value || '')
+      .split('\n')
+      .map((l: string) => l.replace(/^•\s*/, '').trim())
+      .filter((l: string) => l.length > 0 && !l.includes('No players') && !l.includes('None') && !l.includes('No backups'));
+
+    if (!result[role]) result[role] = [];
+    result[role].push(...lines);
+  }
+  return result;
+}
+
+export async function syncFromDiscord(): Promise<{
+  success: boolean;
+  nodeCount: number;
+  siegeCount: number;
+  message: string;
+}> {
+  if (!client || !client.isReady || !client.isReady()) {
+    return { success: false, nodeCount: 0, siegeCount: 0, message: 'Discord bot client is not connected' };
+  }
+
+  try {
+    const guild = CONFIG.SERVER_ID ? await client.guilds.fetch(CONFIG.SERVER_ID).catch(() => null) : null;
+    const nameMap = new Map<string, { id: string; name: string }>();
+    if (guild) {
+      const members = await guild.members.fetch().catch(() => null);
+      if (members) {
+        for (const [id, m] of members) {
+          nameMap.set(m.displayName.toLowerCase(), { id, name: m.displayName });
+          nameMap.set(m.user.username.toLowerCase(), { id, name: m.displayName });
+        }
+      }
+    }
+
+    const buildRecords = (roleMap: Record<string, string[]>) => {
+      const recs: Record<string, MemberRecord[]> = {};
+      for (const [role, names] of Object.entries(roleMap)) {
+        recs[role] = names.map((n) => {
+          const match = nameMap.get(n.toLowerCase());
+          return {
+            id: match ? match.id : `synced-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            name: match ? match.name : n,
+          };
+        });
+      }
+      return recs;
+    };
+
+    let nodeCount = 0;
+    let siegeCount = 0;
+
+    // 1. Sync Node War
+    if (CONFIG.CHANNEL_ID) {
+      const nodeCh: any = await client.channels.fetch(CONFIG.CHANNEL_ID).catch(() => null);
+      if (nodeCh && nodeCh.messages) {
+        const msgs = await nodeCh.messages.fetch({ limit: 15 }).catch(() => null);
+        if (msgs) {
+          let mainMsg: any = null;
+          let waitMsg: any = null;
+          for (const [, msg] of msgs) {
+            for (const emb of msg.embeds || []) {
+              if (emb.title && emb.title.includes('Node War RSVP') && !mainMsg) {
+                mainMsg = msg;
+              }
+              if (emb.title && emb.title.includes('Waitlist') && !waitMsg) {
+                waitMsg = msg;
+              }
+            }
+            if (mainMsg && waitMsg) break;
+          }
+
+          if (mainMsg) {
+            const data = {
+              Builder: [],
+              Elephant: [],
+              Flag: [],
+              FT: [],
+              Hwacha: [],
+              Shai: [],
+              Shotcaller: [],
+              'Main Ball': [],
+              ...parseEmbedRoleMembers(mainMsg.embeds[0]),
+            };
+            const waitlist = {
+              Builder: [],
+              Elephant: [],
+              Flag: [],
+              FT: [],
+              Hwacha: [],
+              Shai: [],
+              Shotcaller: [],
+              'Main Ball': [],
+              ...(waitMsg ? parseEmbedRoleMembers(waitMsg.embeds[0]) : {}),
+            };
+            const isClosed = Boolean(
+              mainMsg.content?.includes('CLOSED') || mainMsg.embeds[0]?.description?.includes('CLOSED')
+            );
+            const targetDateStr = moment().tz(JAKARTA_TZ).format('YYYY-MM-DD');
+
+            const nodeState = {
+              target_date: targetDateStr,
+              is_closed: isClosed,
+              data,
+              waitlist,
+              member_data: buildRecords(data),
+              member_waitlist: buildRecords(waitlist),
+              session_type: 'node',
+              main_msg_id: mainMsg.id,
+              waitlist_msg_id: waitMsg?.id || null,
+            };
+            fs.writeFileSync(DATA_FILE, JSON.stringify(nodeState, null, 4));
+            restoreState(DATA_FILE, 'currentSession', '');
+            nodeCount = Object.values(data).reduce((s, a) => s + a.length, 0);
+            log('INFO', `Synced ${nodeCount} Node War members from Discord message ${mainMsg.id}`);
+          }
+        }
+      }
+    }
+
+    // 2. Sync Siege War
+    if (CONFIG.SIEGE_CHANNEL_ID) {
+      const siegeCh: any = await client.channels.fetch(CONFIG.SIEGE_CHANNEL_ID).catch(() => null);
+      if (siegeCh && siegeCh.messages) {
+        const msgs = await siegeCh.messages.fetch({ limit: 15 }).catch(() => null);
+        if (msgs) {
+          let mainMsg: any = null;
+          let waitMsg: any = null;
+          for (const [, msg] of msgs) {
+            for (const emb of msg.embeds || []) {
+              if (emb.title && emb.title.includes('Siege War RSVP') && !mainMsg) {
+                mainMsg = msg;
+              }
+              if (emb.title && emb.title.includes('Waitlist') && !waitMsg) {
+                waitMsg = msg;
+              }
+            }
+            if (mainMsg && waitMsg) break;
+          }
+
+          if (mainMsg) {
+            const data = {
+              Builder: [],
+              Elephant: [],
+              Flag: [],
+              FT: [],
+              Hwacha: [],
+              Shai: [],
+              Shotcaller: [],
+              'Witch/Wizard': [],
+              'Main Ball': [],
+              ...parseEmbedRoleMembers(mainMsg.embeds[0]),
+            };
+            const waitlist = {
+              Builder: [],
+              Elephant: [],
+              Flag: [],
+              FT: [],
+              Hwacha: [],
+              Shai: [],
+              Shotcaller: [],
+              'Witch/Wizard': [],
+              'Main Ball': [],
+              ...(waitMsg ? parseEmbedRoleMembers(waitMsg.embeds[0]) : {}),
+            };
+            const isClosed = Boolean(
+              mainMsg.content?.includes('CLOSED') || mainMsg.embeds[0]?.description?.includes('CLOSED')
+            );
+            const targetDateStr = '2026-09-06';
+
+            const siegeState = {
+              target_date: targetDateStr,
+              is_closed: isClosed,
+              data,
+              waitlist,
+              member_data: buildRecords(data),
+              member_waitlist: buildRecords(waitlist),
+              session_type: 'siege',
+              main_msg_id: mainMsg.id,
+              waitlist_msg_id: waitMsg?.id || null,
+            };
+            fs.writeFileSync(SIEGE_DATA_FILE, JSON.stringify(siegeState, null, 4));
+            restoreState(SIEGE_DATA_FILE, 'siegeSession', 'siege');
+            siegeCount = Object.values(data).reduce((s, a) => s + a.length, 0);
+            log('INFO', `Synced ${siegeCount} Siege War members from Discord message ${mainMsg.id}`);
+          }
+        }
+      }
+    }
+
+    return {
+      success: true,
+      nodeCount,
+      siegeCount,
+      message: `Successfully synchronized from Discord: ${nodeCount} Node War members and ${siegeCount} Siege War members.`,
+    };
+  } catch (err: any) {
+    log('ERROR', `Failed to sync from Discord: ${err?.message || err}`);
+    return {
+      success: false,
+      nodeCount: 0,
+      siegeCount: 0,
+      message: err?.message || 'Sync failed',
+    };
+  }
+}
 
 // Initial boot restoration even before bot logs in
 restoreState();

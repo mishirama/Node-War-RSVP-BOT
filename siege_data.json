@@ -1,24 +1,40 @@
 {
-    "target_date": "2026-09-11",
+    "target_date": "2026-09-06",
     "is_closed": false,
     "data": {
         "Builder": [
             "[Ego] Mishirama"
         ],
-        "Elephant": [],
-        "Flag": [],
+        "Elephant": [
+            "[Ego] BlueCarp"
+        ],
+        "Flag": [
+            "[RB] Killua"
+        ],
         "FT": [
             "[RB] Urva",
-            "[Ego] JAKUT"
+            "[Ego] JAKUT",
+            "[RB] Manipulator"
         ],
         "Hwacha": [
-            "[TC] Alexis"
+            "[TC] Alexis",
+            "[RB] Touwa"
         ],
         "Shai": [
-            "[TC]Geekay"
+            "[TC]Geekay",
+            "[RB] Zonya",
+            "[RB] Shai God",
+            "[TC] Six7",
+            "[Ego] Kakikrem"
         ],
-        "Shotcaller": [],
-        "Witch/Wizard": [],
+        "Shotcaller": [
+            "YuvaLeeUs5Eva"
+        ],
+        "Witch/Wizard": [
+            "[Ego] PanciiSuper",
+            "[RB] Boaat",
+            "[Ego] Tergeron"
+        ],
         "Main Ball": [
             "[Ego] Bennieee",
             "[TC] Katochimoto",
@@ -49,7 +65,18 @@
             "[TC] Kayatadude",
             "[RB] Hilmanh",
             "[TC]Hiiro",
-            "[RB] Gestella"
+            "[RB] Gestella",
+            "[TC] forget",
+            "[RB] Oxcy",
+            "[TC]Zsbaer",
+            "[TC] Badoom",
+            "[RB] Andriana",
+            "[RB] SkyJaw",
+            "[TC] Wazouskie",
+            "[Ego] Pewpww",
+            "[TC] Lumini",
+            "[RB] Rotheimer",
+            "[Ego] YourLord"
         ]
     },
     "waitlist": {
@@ -68,156 +95,252 @@
     "member_data": {
         "Builder": [
             {
-                "id": "400613792825999360",
+                "id": "synced-1789141094813-niu59",
                 "name": "[Ego] Mishirama"
             }
         ],
-        "Elephant": [],
-        "Flag": [],
+        "Elephant": [
+            {
+                "id": "synced-1789141094813-w5tsu",
+                "name": "[Ego] BlueCarp"
+            }
+        ],
+        "Flag": [
+            {
+                "id": "synced-1789141094813-xgnim",
+                "name": "[RB] Killua"
+            }
+        ],
         "FT": [
             {
-                "id": "legacy-1789135386435-0.1457976949103863",
+                "id": "synced-1789141094813-306qy",
                 "name": "[RB] Urva"
             },
             {
-                "id": "legacy-1789135386435-0.379868146430828",
+                "id": "synced-1789141094813-hmljb",
                 "name": "[Ego] JAKUT"
+            },
+            {
+                "id": "synced-1789141094813-1eaje",
+                "name": "[RB] Manipulator"
             }
         ],
         "Hwacha": [
             {
-                "id": "legacy-1789135386435-0.25513983016762665",
+                "id": "synced-1789141094813-e4f3l",
                 "name": "[TC] Alexis"
+            },
+            {
+                "id": "synced-1789141094813-cdwif",
+                "name": "[RB] Touwa"
             }
         ],
         "Shai": [
             {
-                "id": "legacy-1789135386435-0.7662404646536349",
+                "id": "synced-1789141094813-u0lnj",
                 "name": "[TC]Geekay"
+            },
+            {
+                "id": "synced-1789141094813-x2fac",
+                "name": "[RB] Zonya"
+            },
+            {
+                "id": "synced-1789141094813-kczdr",
+                "name": "[RB] Shai God"
+            },
+            {
+                "id": "synced-1789141094813-27l38",
+                "name": "[TC] Six7"
+            },
+            {
+                "id": "synced-1789141094813-ftax5",
+                "name": "[Ego] Kakikrem"
             }
         ],
-        "Shotcaller": [],
-        "Witch/Wizard": [],
+        "Shotcaller": [
+            {
+                "id": "synced-1789141094813-og4no",
+                "name": "YuvaLeeUs5Eva"
+            }
+        ],
+        "Witch/Wizard": [
+            {
+                "id": "synced-1789141094813-prhrt",
+                "name": "[Ego] PanciiSuper"
+            },
+            {
+                "id": "synced-1789141094813-gv0ld",
+                "name": "[RB] Boaat"
+            },
+            {
+                "id": "synced-1789141094813-2k2b4",
+                "name": "[Ego] Tergeron"
+            }
+        ],
         "Main Ball": [
             {
-                "id": "272399241865854977",
+                "id": "synced-1789141094813-12gd3",
                 "name": "[Ego] Bennieee"
             },
             {
-                "id": "legacy-1789135386435-0.3252824913700172",
+                "id": "synced-1789141094813-xo34q",
                 "name": "[TC] Katochimoto"
             },
             {
-                "id": "legacy-1789135386435-0.5113376425537954",
+                "id": "synced-1789141094813-ul5l1",
                 "name": "[TC] MysstBDO"
             },
             {
-                "id": "legacy-1789135386435-0.12674331004546668",
+                "id": "synced-1789141094813-jdvsv",
                 "name": "[TC] Voxirus"
             },
             {
-                "id": "160515080599896065",
+                "id": "synced-1789141094813-82wmp",
                 "name": "[TC] Basement50mgTren"
             },
             {
-                "id": "legacy-1789135386436-0.8822304868694495",
+                "id": "synced-1789141094813-kyaql",
                 "name": "[TC] JaHaoBee"
             },
             {
-                "id": "legacy-1789135386436-0.8692660506786642",
+                "id": "synced-1789141094813-anco4",
                 "name": "[RB] Sangmane"
             },
             {
-                "id": "legacy-1789135386436-0.05213382189930904",
+                "id": "synced-1789141094813-qwkmg",
                 "name": "[RB] Vatu"
             },
             {
-                "id": "legacy-1789135386436-0.6648182244415692",
+                "id": "synced-1789141094813-3jept",
                 "name": "[RB] Rizky"
             },
             {
-                "id": "legacy-1789135386436-0.5458054751226862",
+                "id": "synced-1789141094813-1dzhl",
                 "name": "[RB] AoimamaKun"
             },
             {
-                "id": "legacy-1789135386436-0.15574229058759848",
+                "id": "synced-1789141094813-rflak",
                 "name": "[TC] MANON"
             },
             {
-                "id": "legacy-1789135386436-0.35974632971796106",
+                "id": "synced-1789141094813-ekfzb",
                 "name": "[RB] Mewrah"
             },
             {
-                "id": "legacy-1789135386436-0.7875525589840426",
+                "id": "synced-1789141094813-0u47c",
                 "name": "[RB] BlekMgicLoli"
             },
             {
-                "id": "legacy-1789135386436-0.9554348443970517",
+                "id": "synced-1789141094813-vzk5r",
                 "name": "[RB] Zamharin"
             },
             {
-                "id": "legacy-1789135386436-0.5426361224968335",
+                "id": "synced-1789141094813-cdpag",
                 "name": "[Ego] Polished"
             },
             {
-                "id": "legacy-1789135386436-0.30672004119032303",
+                "id": "synced-1789141094813-b3h94",
                 "name": "[Ego] Apin from Ego not RB"
             },
             {
-                "id": "legacy-1789135386436-0.014516327457745781",
+                "id": "synced-1789141094813-fr5wx",
                 "name": "[RB] Sherzinger"
             },
             {
-                "id": "legacy-1789135386436-0.27044821160664423",
+                "id": "synced-1789141094813-4sbli",
                 "name": "[TC] Reindl"
             },
             {
-                "id": "legacy-1789135386436-0.16247098851611996",
+                "id": "synced-1789141094813-0jku2",
                 "name": "[TC] Pwincess Mayve"
             },
             {
-                "id": "legacy-1789135386436-0.5044640216784819",
+                "id": "synced-1789141094813-a5m9p",
                 "name": "[TC] Magie"
             },
             {
-                "id": "407518710069460994",
+                "id": "synced-1789141094813-c6oon",
                 "name": "[TC] Eocene"
             },
             {
-                "id": "legacy-1789135386436-0.9045606279691403",
+                "id": "synced-1789141094813-ia0gk",
                 "name": "[TC] Shigeruu"
             },
             {
-                "id": "legacy-1789135386436-0.84899278152175",
+                "id": "synced-1789141094813-dnrqk",
                 "name": "[TC] Diangod"
             },
             {
-                "id": "legacy-1789135386436-0.16452432649479354",
+                "id": "synced-1789141094813-98lsi",
                 "name": "[TC] TeeRaw"
             },
             {
-                "id": "401680035003498499",
+                "id": "synced-1789141094813-wuix3",
                 "name": "[RB] Wujincul"
             },
             {
-                "id": "112826009660694528",
+                "id": "synced-1789141094813-xw0ns",
                 "name": "[RB] MinessotaJR"
             },
             {
-                "id": "159440855768236032",
+                "id": "synced-1789141094813-dwqs0",
                 "name": "[TC] Kayatadude"
             },
             {
-                "id": "424509666660188170",
+                "id": "synced-1789141094813-pjgc7",
                 "name": "[RB] Hilmanh"
             },
             {
-                "id": "318300403055984640",
+                "id": "synced-1789141094813-g7t1h",
                 "name": "[TC]Hiiro"
             },
             {
-                "id": "232140750178091018",
+                "id": "synced-1789141094813-f12wn",
                 "name": "[RB] Gestella"
+            },
+            {
+                "id": "synced-1789141094813-pb8ri",
+                "name": "[TC] forget"
+            },
+            {
+                "id": "synced-1789141094813-qlgmm",
+                "name": "[RB] Oxcy"
+            },
+            {
+                "id": "synced-1789141094813-hqffp",
+                "name": "[TC]Zsbaer"
+            },
+            {
+                "id": "synced-1789141094813-6ufzf",
+                "name": "[TC] Badoom"
+            },
+            {
+                "id": "synced-1789141094813-bfegs",
+                "name": "[RB] Andriana"
+            },
+            {
+                "id": "synced-1789141094813-0wyxo",
+                "name": "[RB] SkyJaw"
+            },
+            {
+                "id": "synced-1789141094813-wcp67",
+                "name": "[TC] Wazouskie"
+            },
+            {
+                "id": "synced-1789141094813-7mwvm",
+                "name": "[Ego] Pewpww"
+            },
+            {
+                "id": "synced-1789141094813-kadyo",
+                "name": "[TC] Lumini"
+            },
+            {
+                "id": "synced-1789141094813-t3a2b",
+                "name": "[RB] Rotheimer"
+            },
+            {
+                "id": "synced-1789141094813-y1qr8",
+                "name": "[Ego] YourLord"
             }
         ]
     },
@@ -228,7 +351,7 @@
         "FT": [],
         "Hwacha": [
             {
-                "id": "222001477156208640",
+                "id": "synced-1789141094813-6888z",
                 "name": "[RB] Touwa"
             }
         ],
@@ -239,5 +362,5 @@
     },
     "session_type": "siege",
     "main_msg_id": "1547966965522374707",
-    "waitlist_msg_id": null
+    "waitlist_msg_id": "1547966970383704065"
 }

@@ -160,6 +160,7 @@ export default function App() {
       else if (action === 'open-siege') endpoint = '/api/actions/open-siege';
       else if (action === 'close-siege') endpoint = '/api/actions/close-siege';
       else if (action === 'send-reminder') endpoint = '/api/actions/send-reminder';
+      else if (action === 'sync-discord') endpoint = '/api/sync-discord';
 
       if (!endpoint) return;
 

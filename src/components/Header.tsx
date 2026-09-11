@@ -184,6 +184,17 @@ export const Header: React.FC<HeaderProps> = ({
                 <Bell className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Remind</span>
               </button>
+
+              <button
+                id="btn-sync-discord"
+                disabled={loadingAction !== null}
+                onClick={() => onAction('sync-discord')}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#242730] hover:bg-emerald-950/60 hover:text-emerald-300 hover:border-emerald-700/60 border border-[#3c424e] text-slate-300 text-xs font-medium transition-all"
+                title="Synchronize registered members directly from active Discord messages"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingAction === 'sync-discord' ? 'animate-spin text-emerald-400' : ''}`} />
+                <span className="hidden sm:inline">Sync Discord</span>
+              </button>
             </div>
           </div>
         </div>

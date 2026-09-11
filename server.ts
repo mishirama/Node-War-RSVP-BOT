@@ -24,6 +24,7 @@ import {
   getBenchHistory,
   getPriorityBenchUsers,
   restoreState,
+  syncFromDiscord,
 } from './server/bot.js';
 import {
   OFFICIAL_TOTAL_PAX,
@@ -296,6 +297,17 @@ async function startServer() {
       res.download(filePath, `${type}-backup-${new Date().toISOString().slice(0, 10)}.json`);
     } else {
       res.status(404).json({ error: 'Backup not found' });
+    }
+  });
+
+  // Sync with Discord live messages
+  app.post('/api/sync-discord', async (req, res) => {
+    try {
+      const result = await syncFromDiscord();
+      res.json(result);
+    } catch (err: any) {
+      log('ERROR', `Discord sync endpoint error: ${err}`);
+      res.status(500).json({ success: false, error: err?.message || 'Sync failed' });
     }
   });
 
