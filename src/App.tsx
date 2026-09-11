@@ -142,12 +142,39 @@ export default function App() {
 
   useEffect(() => {
     loadAll();
-    // Poll sessions and status every 8 seconds for live updates
+
+    // Real-time updates via Server-Sent Events (SSE)
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource('/api/events');
+      eventSource.onmessage = (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (payload.type === 'session_update') {
+            fetchSessions();
+            fetchStatus();
+          }
+        } catch {
+          // ignore keepalive
+        }
+      };
+      eventSource.onerror = () => {
+        // Fallback silently to polling on reconnection
+      };
+    } catch {
+      // ignore
+    }
+
+    // Polling fallback every 5 seconds for live updates
     const interval = setInterval(() => {
       fetchStatus();
       fetchSessions();
-    }, 8000);
-    return () => clearInterval(interval);
+    }, 5000);
+
+    return () => {
+      if (eventSource) eventSource.close();
+      clearInterval(interval);
+    };
   }, [loadAll, fetchStatus, fetchSessions]);
 
   // Actions

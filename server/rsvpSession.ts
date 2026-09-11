@@ -12,6 +12,7 @@ import {
 } from 'discord.js';
 import { CONFIG, DATA_FILE, log } from './config.js';
 import { ROLE_EMOJIS, DAY_KEYS, ROLE_BUTTONS, formatDiscordRoleEmoji } from './constants.js';
+import { notifySessionUpdate } from './events.js';
 
 export interface MemberRecord {
   id: string;
@@ -91,6 +92,8 @@ export class RSVPSession {
           4
         )
       );
+      // Immediately notify SSE listeners for real-time web dashboard sync
+      notifySessionUpdate(this.sessionType);
     } catch (err) {
       log('ERROR', `Failed to save state to ${this.dataFile}: ${err}`);
     }
@@ -344,6 +347,77 @@ export class RSVPSession {
     this.triggerDiscordUpdate(300);
   }
 
+  findMemberIndex(
+    roleList: string[] = [],
+    memberList: MemberRecord[] = [],
+    userId: string = '',
+    name: string = ''
+  ): number {
+    if (!roleList || !roleList.length) return -1;
+    const cleanUserId = String(userId || '').trim();
+    const cleanName = String(name || '').toLowerCase().trim();
+
+    // 1. Match by Discord user ID (highest fidelity)
+    if (cleanUserId && memberList?.length) {
+      const idIdx = memberList.findIndex((m) => m && String(m.id).trim() === cleanUserId);
+      if (idIdx !== -1) return idIdx;
+    }
+
+    // 2. Match by exact or partial display name / nickname
+    if (cleanName) {
+      const nameIdx = roleList.findIndex((savedName, idx) => {
+        const lowerSaved = String(savedName || '').toLowerCase().trim();
+        const savedMemberName = String(memberList?.[idx]?.name || '').toLowerCase().trim();
+        return (
+          lowerSaved === cleanName ||
+          savedMemberName === cleanName ||
+          (cleanName.length >= 3 && (lowerSaved.endsWith(cleanName) || cleanName.endsWith(lowerSaved)))
+        );
+      });
+      if (nameIdx !== -1) return nameIdx;
+    }
+
+    return -1;
+  }
+
+  promoteWaitlist(specificRole?: string): string[] {
+    const rolesToCheck = specificRole ? [specificRole] : Object.keys(this.limits);
+    const promotedNames: string[] = [];
+
+    for (const r of rolesToCheck) {
+      const limit = this.limits[r] || 0;
+      if (!this.data[r]) this.data[r] = [];
+      if (!this.memberData[r]) this.memberData[r] = [];
+      if (!this.waitlist[r]) this.waitlist[r] = [];
+      if (!this.memberWaitlist[r]) this.memberWaitlist[r] = [];
+
+      while (this.data[r].length < limit && this.waitlist[r].length > 0) {
+        const nextUser = this.waitlist[r].shift()!;
+        let nextMember = this.memberWaitlist[r]?.length > 0 ? this.memberWaitlist[r].shift()! : null;
+        if (!nextMember || !nextMember.name) {
+          nextMember = {
+            id: `promoted-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            name: nextUser,
+          };
+        }
+        this.data[r].push(nextUser);
+        this.memberData[r].push(nextMember);
+        promotedNames.push(nextUser);
+
+        log(
+          'SUCCESS',
+          `[${this.sessionType.toUpperCase()}] Promoted ${nextUser} from ${r} waitlist into roster (${this.data[r].length}/${limit})`
+        );
+      }
+    }
+
+    if (promotedNames.length > 0) {
+      this.saveState();
+      this.triggerDiscordUpdate(500);
+    }
+    return promotedNames;
+  }
+
   async processRoleSelection(interaction: ButtonInteraction, role: string) {
     if (this.isClosed) {
       await interaction.followUp({
@@ -358,54 +432,139 @@ export class RSVPSession {
       await interaction.deferUpdate().catch(() => {});
     }
 
-    const user = (interaction.member as any)?.displayName || interaction.user.username;
-    const member: MemberRecord = { id: interaction.user.id, name: user };
+    const userId = interaction.user.id;
+    const displayName = (interaction.member as any)?.displayName || interaction.user.username;
+    const member: MemberRecord = { id: userId, name: displayName };
 
-    // Remove from existing roles
+    // 1. If clicking a role (not Cancel), check if user is ALREADY registered in that role or waitlist
+    if (role !== 'Cancel') {
+      const currentRoleIdx = this.findMemberIndex(
+        this.data[role] || [],
+        this.memberData[role] || [],
+        userId,
+        displayName
+      );
+      if (currentRoleIdx !== -1) {
+        await interaction.followUp({
+          content: `ℹ️ You are already registered for **${role}**!`,
+          flags: MessageFlags.Ephemeral,
+        }).catch(() => {});
+        return;
+      }
+
+      const currentWaitIdx = this.findMemberIndex(
+        this.waitlist[role] || [],
+        this.memberWaitlist[role] || [],
+        userId,
+        displayName
+      );
+      if (currentWaitIdx !== -1) {
+        await interaction.followUp({
+          content: `ℹ️ You are already on the **${role}** waitlist (Position #${currentWaitIdx + 1}).`,
+          flags: MessageFlags.Ephemeral,
+        }).catch(() => {});
+        return;
+      }
+    }
+
+    // 2. Remove user from any previous roles or waitlists they may have had
+    let removedFromRole: string | null = null;
+    let wasWaitlisted = false;
+
     for (const r of Object.keys(this.limits)) {
-      const idx = this.data[r].findIndex(
-        (savedName, index) => this.memberData[r][index]?.id === member.id || savedName === user
+      // Check active roster
+      const idx = this.findMemberIndex(
+        this.data[r] || [],
+        this.memberData[r] || [],
+        userId,
+        displayName
       );
       if (idx !== -1) {
         this.data[r].splice(idx, 1);
-        this.memberData[r].splice(idx, 1);
-        if (this.waitlist[r]?.length) {
-          this.data[r].push(this.waitlist[r].shift()!);
-          this.memberData[r].push(this.memberWaitlist[r].shift()!);
+        if (this.memberData[r]?.length > idx) {
+          this.memberData[r].splice(idx, 1);
         }
+        removedFromRole = r;
+        wasWaitlisted = false;
+
+        // Immediately promote the next player from waitlist into this role
+        this.promoteWaitlist(r);
       }
-      const wIdx = this.waitlist[r].findIndex(
-        (savedName, index) => this.memberWaitlist[r][index]?.id === member.id || savedName === user
+
+      // Check waitlist queue
+      const wIdx = this.findMemberIndex(
+        this.waitlist[r] || [],
+        this.memberWaitlist[r] || [],
+        userId,
+        displayName
       );
       if (wIdx !== -1) {
         this.waitlist[r].splice(wIdx, 1);
-        this.memberWaitlist[r].splice(wIdx, 1);
+        if (this.memberWaitlist[r]?.length > wIdx) {
+          this.memberWaitlist[r].splice(wIdx, 1);
+        }
+        removedFromRole = r;
+        wasWaitlisted = true;
       }
     }
 
-    let isWaitlisted = false;
-    if (role !== 'Cancel') {
-      if (this.data[role].length < (this.limits[role] || 0)) {
-        this.data[role].push(user);
-        this.memberData[role].push(member);
+    // 3. Handle Cancel action
+    if (role === 'Cancel') {
+      this.saveState();
+      this.triggerDiscordUpdate(500);
+
+      if (removedFromRole) {
+        if (wasWaitlisted) {
+          await interaction.followUp({
+            content: `❌ You have been removed from the **${removedFromRole}** waitlist.`,
+            flags: MessageFlags.Ephemeral,
+          }).catch(() => {});
+        } else {
+          await interaction.followUp({
+            content: `❌ You have cancelled your registration for **${removedFromRole}**. If someone was on the waitlist, they have been promoted to fill the slot!`,
+            flags: MessageFlags.Ephemeral,
+          }).catch(() => {});
+        }
       } else {
-        this.waitlist[role].push(user);
-        this.memberWaitlist[role].push(member);
-        isWaitlisted = true;
+        await interaction.followUp({
+          content: 'ℹ️ You are not currently registered for any role.',
+          flags: MessageFlags.Ephemeral,
+        }).catch(() => {});
       }
+      return;
     }
 
-    // Persist immediately so state is never lost even if Discord edit is delayed
-    this.saveState();
+    // 4. Handle Role Join (e.g. Main Ball or specialized roles)
+    const limit = this.limits[role] || 0;
+    if (!this.data[role]) this.data[role] = [];
+    if (!this.memberData[role]) this.memberData[role] = [];
+    if (!this.waitlist[role]) this.waitlist[role] = [];
+    if (!this.memberWaitlist[role]) this.memberWaitlist[role] = [];
 
-    if (isWaitlisted) {
+    if (this.data[role].length < limit) {
+      // Slot available -> Add to Active Roster
+      this.data[role].push(displayName);
+      this.memberData[role].push(member);
+      this.saveState();
+      this.triggerDiscordUpdate(500);
+
       await interaction.followUp({
-        content: `⚠️ ${role} is full! You have been placed into the Waitlist / Backup queue.`,
+        content: `✅ You have successfully registered for **${role}**! (${this.data[role].length}/${limit})`,
+        flags: MessageFlags.Ephemeral,
+      }).catch(() => {});
+    } else {
+      // Role is Full -> Place on Waitlist
+      this.waitlist[role].push(displayName);
+      this.memberWaitlist[role].push(member);
+      const position = this.waitlist[role].length;
+      this.saveState();
+      this.triggerDiscordUpdate(500);
+
+      await interaction.followUp({
+        content: `⚠️ **${role}** is currently full (${this.data[role].length}/${limit}). You have been placed on the **Waitlist** (Position #${position}). If any registered player cancels their vote, you will automatically be pushed into **${role}**!`,
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
     }
-
-    this.triggerDiscordUpdate(750);
   }
 
   // Programmatic assignment from Web UI
@@ -416,29 +575,27 @@ export class RSVPSession {
 
     // Remove from existing roles
     for (const r of Object.keys(this.limits)) {
-      const idx = this.data[r].findIndex(
-        (n, i) => this.memberData[r]?.[i]?.id === member.id || n.toLowerCase() === user.toLowerCase()
-      );
+      const idx = this.findMemberIndex(this.data[r] || [], this.memberData[r] || [], member.id, user);
       if (idx !== -1) {
         this.data[r].splice(idx, 1);
-        this.memberData[r].splice(idx, 1);
-        if (this.waitlist[r]?.length) {
-          this.data[r].push(this.waitlist[r].shift()!);
-          this.memberData[r].push(this.memberWaitlist[r].shift()!);
+        if (this.memberData[r]?.length > idx) {
+          this.memberData[r].splice(idx, 1);
         }
+        // Promote waitlist if slot opened
+        this.promoteWaitlist(r);
       }
-      const wIdx = this.waitlist[r].findIndex(
-        (n, i) => this.memberWaitlist[r]?.[i]?.id === member.id || n.toLowerCase() === user.toLowerCase()
-      );
+      const wIdx = this.findMemberIndex(this.waitlist[r] || [], this.memberWaitlist[r] || [], member.id, user);
       if (wIdx !== -1) {
         this.waitlist[r].splice(wIdx, 1);
-        this.memberWaitlist[r].splice(wIdx, 1);
+        if (this.memberWaitlist[r]?.length > wIdx) {
+          this.memberWaitlist[r].splice(wIdx, 1);
+        }
       }
     }
 
     if (role === 'Cancel') {
       this.saveState();
-      this.batchUpdateDiscord().catch(() => {});
+      this.triggerDiscordUpdate(500);
       return { success: true, message: `Removed ${user}` };
     }
 
@@ -457,37 +614,34 @@ export class RSVPSession {
     }
 
     this.saveState();
-    this.batchUpdateDiscord().catch(() => {});
+    this.triggerDiscordUpdate(500);
     return { success: true, status, message: `${user} added to ${role} (${status})` };
   }
 
   removeMember(nameOrId: string) {
     let removed = false;
     for (const r of Object.keys(this.limits)) {
-      const idx = this.data[r].findIndex(
-        (n, i) => n.toLowerCase() === nameOrId.toLowerCase() || this.memberData[r]?.[i]?.id === nameOrId
-      );
+      const idx = this.findMemberIndex(this.data[r] || [], this.memberData[r] || [], nameOrId, nameOrId);
       if (idx !== -1) {
         this.data[r].splice(idx, 1);
-        this.memberData[r].splice(idx, 1);
-        if (this.waitlist[r]?.length) {
-          this.data[r].push(this.waitlist[r].shift()!);
-          this.memberData[r].push(this.memberWaitlist[r].shift()!);
+        if (this.memberData[r]?.length > idx) {
+          this.memberData[r].splice(idx, 1);
         }
+        this.promoteWaitlist(r);
         removed = true;
       }
-      const wIdx = this.waitlist[r].findIndex(
-        (n, i) => n.toLowerCase() === nameOrId.toLowerCase() || this.memberWaitlist[r]?.[i]?.id === nameOrId
-      );
+      const wIdx = this.findMemberIndex(this.waitlist[r] || [], this.memberWaitlist[r] || [], nameOrId, nameOrId);
       if (wIdx !== -1) {
         this.waitlist[r].splice(wIdx, 1);
-        this.memberWaitlist[r].splice(wIdx, 1);
+        if (this.memberWaitlist[r]?.length > wIdx) {
+          this.memberWaitlist[r].splice(wIdx, 1);
+        }
         removed = true;
       }
     }
     if (removed) {
       this.saveState();
-      this.batchUpdateDiscord().catch(() => {});
+      this.triggerDiscordUpdate(500);
     }
     return removed;
   }

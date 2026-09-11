@@ -1,0 +1,40 @@
+{
+    "target_date": "2026-09-11",
+    "is_closed": false,
+    "data": {
+        "Main Ball": [
+            "Player 3",
+            "Player 4 (Waitlisted)",
+            "Player 5 (Waitlisted)"
+        ],
+        "Elephant": []
+    },
+    "waitlist": {
+        "Main Ball": [],
+        "Elephant": []
+    },
+    "member_data": {
+        "Main Ball": [
+            {
+                "id": "id-3",
+                "name": "Player 3"
+            },
+            {
+                "id": "id-4",
+                "name": "Player 4 (Waitlisted)"
+            },
+            {
+                "id": "id-5",
+                "name": "Player 5 (Waitlisted)"
+            }
+        ],
+        "Elephant": []
+    },
+    "member_waitlist": {
+        "Main Ball": [],
+        "Elephant": []
+    },
+    "session_type": "node",
+    "main_msg_id": null,
+    "waitlist_msg_id": null
+}

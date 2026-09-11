@@ -32,6 +32,7 @@ import {
   DEFAULT_ROLE_LIMITS,
   DEFAULT_SIEGE_ROLE_LIMITS,
 } from './server/constants.js';
+import { sessionEvents } from './server/events.js';
 
 dotenv.config();
 
@@ -149,6 +150,33 @@ async function startServer() {
       log('ERROR', `Config update failed: ${err}`);
       res.status(500).json({ success: false, error: err?.message || 'Update failed' });
     }
+  });
+
+  // Real-time Server-Sent Events (SSE) stream
+  app.get('/api/events', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const handler = (payload: any) => {
+      res.write(`data: ${JSON.stringify({ type: 'session_update', ...payload })}\n\n`);
+    };
+
+    sessionEvents.on('session_update', handler);
+
+    // Initial greeting
+    res.write(`data: ${JSON.stringify({ type: 'connected', timestamp: Date.now() })}\n\n`);
+
+    // Keepalive ping every 15s
+    const pingTimer = setInterval(() => {
+      res.write(': ping\n\n');
+    }, 15000);
+
+    req.on('close', () => {
+      clearInterval(pingTimer);
+      sessionEvents.off('session_update', handler);
+    });
   });
 
   // Active Sessions Data
