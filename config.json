@@ -44,5 +44,6 @@
   "TUE_VOTE_TARGET": "",
   "WED_VOTE_TARGET": "",
   "THU_VOTE_TARGET": "",
-  "FRI_VOTE_TARGET": ""
+  "FRI_VOTE_TARGET": "",
+  "NW_REMINDER_MESSAGE": "⚠️ **Node War In-Game Vote Reminder**\nPlease **YES UP** on **{target}** for **{tier}**!\nMake sure to submit your vote in-game before the deadline."
 }

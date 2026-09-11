@@ -213,8 +213,16 @@ async function startServer() {
 
   app.post('/api/actions/send-reminder', async (req, res) => {
     try {
-      await sendVoteReminder();
-      res.json({ success: true, message: 'Vote reminders sent to Discord' });
+      const { customMessage } = req.body || {};
+      const result = await sendVoteReminder(customMessage);
+      if (result && !result.success) {
+        return res.status(400).json(result);
+      }
+      res.json({
+        success: true,
+        message: result?.message || 'Vote reminder sent to registered Node War participants',
+        details: result,
+      });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err?.message || 'Failed to send reminders' });
     }

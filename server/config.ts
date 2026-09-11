@@ -78,6 +78,8 @@ export const DEFAULT_CONFIG: Record<string, string> = {
   MAINBALL_THU_T2: '25',
   MAINBALL_FRI_T1: '15',
   MAINBALL_FRI_T2: '35',
+  NW_REMINDER_MESSAGE:
+    '⚠️ **Node War In-Game Vote Reminder**\nPlease **YES UP** on **{target}** for **{tier}**!\nMake sure to submit your vote in-game before the deadline.',
 };
 
 export function loadConfig(): Record<string, string> {

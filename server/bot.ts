@@ -302,26 +302,148 @@ export async function closeSiege() {
   return true;
 }
 
-export async function tagRSVPParticipants(session: RSVPSession | null, channelId: string, reminderText: string) {
-  if (!session || session.isClosed || !client.isReady || !client.isReady()) return;
-  const channel = await client.channels.fetch(String(channelId || '0')).catch(() => null);
-  if (!channel || !channel.isTextBased()) return;
-  await channel.send({ content: `🔔 @everyone\n${reminderText}`, allowedMentions: { parse: ['everyone'] } });
-}
+export async function sendVoteReminder(customMessage?: string) {
+  if (!client.isReady || !client.isReady()) {
+    log('WARN', 'Discord client not ready. Reminder skipped.');
+    return { success: false, reason: 'Discord bot client is not connected' };
+  }
 
-export async function sendVoteReminder() {
   const session = client.currentSession;
-  if (session && !session.isClosed) {
-    const day = { 0: 'SUN', 1: 'MON', 2: 'TUE', 3: 'WED', 4: 'THU', 5: 'FRI' }[session.targetDate.getDay()];
-    if (day) {
-      const tier = CONFIG[`${day}_TIER`] === 'Tier 2' ? 'Tier 2' : 'Tier 1';
-      const targets = tier === 'Tier 2' ? 'Calpheon or Ulukita' : 'Balenos or Serendia';
-      await tagRSVPParticipants(session, CONFIG.CHANNEL_ID, `Please **YES UP** on **${targets}** for **${tier}**.`);
+  if (!session) {
+    log('REMINDER', 'No Node War session loaded. Reminder skipped.');
+    return { success: false, reason: 'No Node War session is currently active' };
+  }
+
+  if (session.isClosed) {
+    log('REMINDER', 'Node War session is already closed. Reminder skipped.');
+    return { success: false, reason: 'Node War session is closed for today' };
+  }
+
+  const channelId = CONFIG.CHANNEL_ID;
+  const channel = await client.channels.fetch(String(channelId || '0')).catch(() => null);
+  if (!channel || !channel.isTextBased()) {
+    log('ERROR', `Cannot send reminder: channel ${channelId} not found or not text-based.`);
+    return { success: false, reason: `Node War channel ${channelId} not found` };
+  }
+
+  // Collect ONLY participants who already registered for Node War
+  const registeredUserIds = new Set<string>();
+
+  // Main roster
+  if (session.memberData) {
+    for (const members of Object.values(session.memberData)) {
+      if (Array.isArray(members)) {
+        for (const m of members) {
+          if (m?.id && /^\d{17,20}$/.test(m.id)) {
+            registeredUserIds.add(m.id);
+          }
+        }
+      }
     }
   }
 
-  await tagRSVPParticipants(client.siegeSession, CONFIG.SIEGE_CHANNEL_ID, 'Please **YES UP** for the **Siege War** vote.');
-  log('REMINDER', 'Vote reminders triggered.');
+  // Waitlist roster
+  if (session.memberWaitlist) {
+    for (const members of Object.values(session.memberWaitlist)) {
+      if (Array.isArray(members)) {
+        for (const m of members) {
+          if (m?.id && /^\d{17,20}$/.test(m.id)) {
+            registeredUserIds.add(m.id);
+          }
+        }
+      }
+    }
+  }
+
+  // Determine day and tier
+  const dayKey =
+    ({ 0: 'SUN', 1: 'MON', 2: 'TUE', 3: 'WED', 4: 'THU', 5: 'FRI', 6: 'SAT' } as Record<number, string>)[
+      session.targetDate.getDay()
+    ] || 'SUN';
+
+  const dayNames: Record<string, string> = {
+    SUN: 'Sunday',
+    MON: 'Monday',
+    TUE: 'Tuesday',
+    WED: 'Wednesday',
+    THU: 'Thursday',
+    FRI: 'Friday',
+    SAT: 'Saturday',
+  };
+
+  const tier = CONFIG[`${dayKey}_TIER`] === 'Tier 1' ? 'Tier 1' : 'Tier 2';
+  const defaultTarget = tier === 'Tier 2' ? 'Calpheon or Ulukita' : 'Balenos or Serendia';
+  const configuredTarget = CONFIG[`${dayKey}_VOTE_TARGET`]?.trim();
+  const target = configuredTarget || defaultTarget;
+
+  // Custom reminder message template
+  const rawTemplate =
+    customMessage?.trim() ||
+    CONFIG.NW_REMINDER_MESSAGE?.trim() ||
+    '⚠️ **Node War In-Game Vote Reminder**\nPlease **YES UP** on **{target}** for **{tier}**!\nMake sure to submit your vote in-game before the deadline.';
+
+  const formattedMessage = rawTemplate
+    .replace(/\{target\}/gi, target)
+    .replace(/\{tier\}/gi, tier)
+    .replace(/\{date\}/gi, moment(session.targetDate).format('YYYY-MM-DD'))
+    .replace(/\{day\}/gi, dayNames[dayKey] || dayKey)
+    .replace(/\{count\}/gi, String(registeredUserIds.size));
+
+  const userIdsList = Array.from(registeredUserIds);
+
+  if (userIdsList.length === 0) {
+    // If nobody has registered yet, post reminder notice without pinging @everyone
+    await channel.send({
+      content: `🔔 **Node War In-Game Vote Reminder**\n${formattedMessage}\n\n*(Notice: No Node War participants currently registered on the roster).*`,
+      allowedMentions: { parse: [] }, // STRICT: NO @everyone, NO roles
+    });
+    log('REMINDER', `Node War reminder sent (0 registered participants). Target: ${target} (${tier})`);
+    return {
+      success: true,
+      count: 0,
+      target,
+      tier,
+      message: `Reminder sent to Node War channel (0 participants currently registered)`,
+    };
+  }
+
+  // Ping ONLY registered participants (chunked to ensure message stays well under 2000 characters)
+  const mentions = userIdsList.map((id) => `<@${id}>`);
+  const chunkSize = 40;
+
+  for (let i = 0; i < mentions.length; i += chunkSize) {
+    const chunkMentions = mentions.slice(i, i + chunkSize);
+    const chunkIds = userIdsList.slice(i, i + chunkSize);
+
+    let content = '';
+    if (i === 0) {
+      content = `🔔 **Node War In-Game Vote Reminder**\n${formattedMessage}\n\n**Node War Participants (${userIdsList.length}):**\n${chunkMentions.join(' ')}`;
+    } else {
+      content = `**Node War Participants (Continued):**\n${chunkMentions.join(' ')}`;
+    }
+
+    await channel.send({
+      content,
+      allowedMentions: {
+        users: chunkIds, // ONLY ping these registered users
+        roles: [],       // NEVER ping roles
+        parse: [],       // NEVER parse @everyone or @here
+      },
+    });
+  }
+
+  log(
+    'REMINDER',
+    `Node War vote reminder pinged ${userIdsList.length} registered participant(s) for ${target} (${tier}).`
+  );
+
+  return {
+    success: true,
+    count: userIdsList.length,
+    target,
+    tier,
+    message: `Reminder sent! Pinged ${userIdsList.length} registered Node War participant(s).`,
+  };
 }
 
 let schedulerTimer: NodeJS.Timeout | null = null;
@@ -354,10 +476,12 @@ export function startScheduler() {
       await closeRSVP();
     }
 
-    if ((now.hour() === 17 || now.hour() === 19) && now.minute() === 0) {
+    // Automatically send reminder at 17:00 and 19:00 GMT+7 (Asia/Jakarta)
+    if (now.hour() === 17 || now.hour() === 19) {
       const reminderKey = `${now.format('YYYY-MM-DD')}-${now.hour()}`;
       if (!voteReminderSent.has(reminderKey)) {
         voteReminderSent.add(reminderKey);
+        log('REMINDER', `Triggering automated ${now.hour()}:00 GMT+7 Node War vote reminder...`);
         await sendVoteReminder();
       }
     }

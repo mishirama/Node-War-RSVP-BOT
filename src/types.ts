@@ -94,7 +94,8 @@ export interface AppConfig {
   MAINBALL_THU_T2: string;
   MAINBALL_FRI_T1: string;
   MAINBALL_FRI_T2: string;
-  [key: string]: string;
+  NW_REMINDER_MESSAGE?: string;
+  [key: string]: string | undefined;
 }
 
 export interface BenchHistoryEntry {
