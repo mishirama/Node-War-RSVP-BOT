@@ -16,6 +16,10 @@ import {
   Search,
   CheckCircle2,
   Lock,
+  ArrowRightLeft,
+  GripVertical,
+  Bell,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface RosterViewProps {
@@ -26,6 +30,7 @@ interface RosterViewProps {
   isClosed: boolean;
   priorityUsers: MemberRecord[];
   onAssignMember: (role: string, name: string) => Promise<boolean>;
+  onMoveMember: (nameOrId: string, toRole: string) => Promise<boolean>;
   onRemoveMember: (nameOrId: string) => Promise<boolean>;
   roleEmojis: Record<string, string>;
 }
@@ -38,6 +43,7 @@ export const RosterView: React.FC<RosterViewProps> = ({
   isClosed,
   priorityUsers,
   onAssignMember,
+  onMoveMember,
   onRemoveMember,
   roleEmojis,
 }) => {
@@ -47,6 +53,20 @@ export const RosterView: React.FC<RosterViewProps> = ({
   const [addName, setAddName] = useState('');
   const [addRole, setAddRole] = useState('Main Ball');
   const [submitting, setSubmitting] = useState(false);
+
+  // Drag & drop state
+  const [draggedMember, setDraggedMember] = useState<{ name: string; fromRole: string } | null>(null);
+  const [dragOverRole, setDragOverRole] = useState<string | null>(null);
+
+  // Quick move modal state
+  const [moveModal, setMoveModal] = useState<{ name: string; currentRole: string } | null>(null);
+  const [moving, setMoving] = useState(false);
+
+  // Quick action states
+  const [pingingSiege, setPingingSiege] = useState(false);
+  const [pingFeedback, setPingFeedback] = useState<string | null>(null);
+  const [syncingAllianceRole, setSyncingAllianceRole] = useState(false);
+  const [roleFeedback, setRoleFeedback] = useState<string | null>(null);
 
   const roles = Object.keys(limits);
   const data = sessionData?.data || {};
@@ -109,6 +129,51 @@ export const RosterView: React.FC<RosterViewProps> = ({
     if (ok) {
       setAddName('');
       setIsAddOpen(false);
+    }
+  };
+
+  const handlePingSiegeReminder = async () => {
+    setPingingSiege(true);
+    setPingFeedback(null);
+    try {
+      const res = await fetch('/api/actions/send-siege-reminder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customMessage:
+            '⚠️ **Siege War In-Game Vote Reminder**\nPlease **YES UP** at **Balenos Server** at **19:00 GMT+7**!\nMake sure to submit your vote in-game before the deadline.',
+        }),
+      });
+      const resData = await res.json();
+      if (resData.success) {
+        setPingFeedback(`✅ ${resData.message}`);
+      } else {
+        setPingFeedback(`⚠️ ${resData.error || resData.reason || 'Failed to send'}`);
+      }
+    } catch (e: any) {
+      setPingFeedback(`⚠️ Error: ${e?.message || e}`);
+    } finally {
+      setPingingSiege(false);
+      setTimeout(() => setPingFeedback(null), 5000);
+    }
+  };
+
+  const handleSyncAllianceRole = async () => {
+    setSyncingAllianceRole(true);
+    setRoleFeedback(null);
+    try {
+      const res = await fetch('/api/actions/assign-alliance-role', { method: 'POST' });
+      const resData = await res.json();
+      if (resData.success) {
+        setRoleFeedback(`✅ ${resData.message}`);
+      } else {
+        setRoleFeedback(`⚠️ ${resData.error || resData.reason || 'Failed'}`);
+      }
+    } catch (e: any) {
+      setRoleFeedback(`⚠️ Error: ${e?.message || e}`);
+    } finally {
+      setSyncingAllianceRole(false);
+      setTimeout(() => setRoleFeedback(null), 6000);
     }
   };
 
@@ -193,6 +258,30 @@ export const RosterView: React.FC<RosterViewProps> = ({
                 )}
               </button>
 
+              {mode === 'siege' && (
+                <button
+                  id="btn-ping-siege-reminder"
+                  onClick={handlePingSiegeReminder}
+                  disabled={pingingSiege}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 text-xs font-semibold shadow-sm transition-colors disabled:opacity-50"
+                  title="Ping Balenos Server 19:00 GMT+7 in-game vote reminder to all registered Siege War members"
+                >
+                  <Bell className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{pingingSiege ? 'Pinging...' : 'Ping Balenos 19:00'}</span>
+                </button>
+              )}
+
+              <button
+                id="btn-sync-alliance-role"
+                onClick={handleSyncAllianceRole}
+                disabled={syncingAllianceRole}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2a2e36] hover:bg-[#343943] text-slate-300 border border-[#3e4450] text-xs font-semibold transition-colors disabled:opacity-50"
+                title="Ensure all server members have the Alliance role (1544708723912482896)"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
+                <span>{syncingAllianceRole ? 'Checking...' : 'Sync Alliance Role'}</span>
+              </button>
+
               <button
                 id="btn-open-add-member"
                 onClick={() => setIsAddOpen(true)}
@@ -205,27 +294,47 @@ export const RosterView: React.FC<RosterViewProps> = ({
           </div>
         </div>
 
-        {/* Search & Filter */}
-        <div className="mt-4 pt-3 border-t border-[#2d323b] flex items-center gap-3">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
-            <input
-              id="filter-roster-input"
-              type="text"
-              placeholder="Search player name or squad tag (e.g., [RB], [TC])..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-[#17191d] border border-[#2d323b] text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-            />
+        {/* Feedback banners */}
+        {pingFeedback && (
+          <div className="mt-3 p-2.5 rounded-lg bg-amber-950/30 border border-amber-500/40 text-xs font-medium text-amber-200 animate-in fade-in">
+            {pingFeedback}
           </div>
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="text-xs text-slate-400 hover:text-slate-200 underline"
-            >
-              Clear filter
-            </button>
-          )}
+        )}
+        {roleFeedback && (
+          <div className="mt-3 p-2.5 rounded-lg bg-indigo-950/30 border border-indigo-500/40 text-xs font-medium text-indigo-200 animate-in fade-in">
+            {roleFeedback}
+          </div>
+        )}
+
+        {/* Search, Filter & Drag Guide */}
+        <div className="mt-4 pt-3 border-t border-[#2d323b] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3 flex-1">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+              <input
+                id="filter-roster-input"
+                type="text"
+                placeholder="Search player name or squad tag (e.g., [RB], [TC])..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-[#17191d] border border-[#2d323b] text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="text-xs text-slate-400 hover:text-slate-200 underline"
+              >
+                Clear filter
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium">
+            <GripVertical className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <span>Drag & drop players between squads to reassign, or click</span>
+            <ArrowRightLeft className="w-3 h-3 text-indigo-300 inline mx-0.5" />
+          </div>
         </div>
       </div>
 
@@ -255,13 +364,14 @@ export const RosterView: React.FC<RosterViewProps> = ({
         </div>
       )}
 
-      {/* Roster Grid */}
+      {/* Roster Grid with Drag & Drop */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {roles.map((role) => {
           const users = data[role] || [];
           const waitlistUsers = waitlist[role] || [];
           const limit = limits[role] || 0;
           const isFull = users.length >= limit;
+          const isDropTarget = dragOverRole === role && draggedMember && draggedMember.fromRole !== role;
 
           // Filter by search query
           const filteredUsers = searchQuery
@@ -281,8 +391,33 @@ export const RosterView: React.FC<RosterViewProps> = ({
           return (
             <div
               key={role}
-              className={`bg-[#202329] border rounded-xl overflow-hidden flex flex-col transition-all ${
-                role === 'Main Ball'
+              onDragOver={(e) => {
+                if (isClosed || !draggedMember || draggedMember.fromRole === role) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (dragOverRole !== role) setDragOverRole(role);
+              }}
+              onDragLeave={(e) => {
+                if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                if (dragOverRole === role) setDragOverRole(null);
+              }}
+              onDrop={async (e) => {
+                e.preventDefault();
+                setDragOverRole(null);
+                const raw = e.dataTransfer.getData('text/plain');
+                if (!raw) return;
+                try {
+                  const parsed = JSON.parse(raw);
+                  if (!parsed?.name || parsed.fromRole === role) return;
+                  await onMoveMember(parsed.name, role);
+                } catch {
+                  // Ignore JSON parse error
+                }
+              }}
+              className={`bg-[#202329] border rounded-xl overflow-hidden flex flex-col transition-all duration-150 ${
+                isDropTarget
+                  ? 'ring-2 ring-indigo-500 border-indigo-400 bg-indigo-950/20 scale-[1.01] shadow-lg shadow-indigo-500/10'
+                  : role === 'Main Ball'
                   ? 'md:col-span-2 lg:col-span-2 border-indigo-500/40 shadow-sm'
                   : 'border-[#343943]'
               }`}
@@ -330,6 +465,13 @@ export const RosterView: React.FC<RosterViewProps> = ({
                 />
               </div>
 
+              {/* Drop Target Indicator */}
+              {isDropTarget && (
+                <div className="mx-3.5 my-2 p-2 rounded-lg border-2 border-dashed border-indigo-400 bg-indigo-500/15 text-center text-xs font-semibold text-indigo-200 animate-pulse">
+                  Drop to move <span className="underline font-bold">{draggedMember?.name}</span> to {role}
+                </div>
+              )}
+
               {/* Members List */}
               <div className="p-3 flex-1 space-y-1.5">
                 {filteredUsers.length > 0 ? (
@@ -340,24 +482,59 @@ export const RosterView: React.FC<RosterViewProps> = ({
                         : 'grid-cols-1'
                     }`}
                   >
-                    {filteredUsers.map((name, idx) => (
-                      <div
-                        key={`${name}-${idx}`}
-                        className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[#1a1d22] border border-[#2d323b] hover:border-slate-600 text-xs transition-colors group"
-                      >
-                        <span className="font-medium text-slate-200 truncate pr-2 flex items-center gap-1.5">
-                          <span className="text-[10px] text-slate-500 font-mono">#{idx + 1}</span>
-                          <span className="truncate">{name}</span>
-                        </span>
-                        <button
-                          onClick={() => onRemoveMember(name)}
-                          className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-rose-400 p-0.5 rounded transition-opacity"
-                          title="Remove from roster"
+                    {filteredUsers.map((name, idx) => {
+                      const isBeingDragged = draggedMember?.name === name;
+                      return (
+                        <div
+                          key={`${name}-${idx}`}
+                          draggable={!isClosed}
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('text/plain', JSON.stringify({ name, fromRole: role }));
+                            e.dataTransfer.effectAllowed = 'move';
+                            setDraggedMember({ name, fromRole: role });
+                          }}
+                          onDragEnd={() => {
+                            setDraggedMember(null);
+                            setDragOverRole(null);
+                          }}
+                          className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[#1a1d22] border text-xs transition-all group select-none ${
+                            isBeingDragged
+                              ? 'opacity-40 border-indigo-500 border-dashed bg-indigo-950/40'
+                              : 'border-[#2d323b] hover:border-slate-500 hover:bg-[#20242b]'
+                          } ${!isClosed ? 'cursor-grab active:cursor-grabbing' : ''}`}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                          <span className="font-medium text-slate-200 truncate pr-1.5 flex items-center gap-1.5">
+                            {!isClosed && (
+                              <GripVertical className="w-3.5 h-3.5 text-slate-500 group-hover:text-indigo-400 shrink-0" />
+                            )}
+                            <span className="text-[10px] text-slate-500 font-mono">#{idx + 1}</span>
+                            <span className="truncate">{name}</span>
+                          </span>
+                          
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {!isClosed && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMoveModal({ name, currentRole: role });
+                                }}
+                                className="text-slate-400 hover:text-indigo-300 p-1 rounded hover:bg-[#2a2e36] transition-colors"
+                                title="Move to another squad"
+                              >
+                                <ArrowRightLeft className="w-3 h-3" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => onRemoveMember(name)}
+                              className="text-slate-500 hover:text-rose-400 p-1 rounded hover:bg-[#2a2e36] transition-colors"
+                              title="Remove from roster"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="py-4 text-center text-xs text-slate-500 italic">
@@ -372,22 +549,52 @@ export const RosterView: React.FC<RosterViewProps> = ({
                       <span>Waitlist Queue ({filteredWaitlist.length})</span>
                     </span>
                     <div className="flex flex-wrap gap-1.5">
-                      {filteredWaitlist.map((wUser, wIdx) => (
-                        <span
-                          key={wIdx}
-                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-200 text-[11px]"
-                        >
-                          <span className="text-[9px] text-amber-400/70 font-mono">Q{wIdx + 1}</span>
-                          <span>{wUser}</span>
-                          <button
-                            onClick={() => onRemoveMember(wUser)}
-                            className="hover:text-rose-400 text-amber-400/60 transition-colors"
-                            title="Remove from waitlist"
+                      {filteredWaitlist.map((wUser, wIdx) => {
+                        const isBeingDragged = draggedMember?.name === wUser;
+                        return (
+                          <span
+                            key={wIdx}
+                            draggable={!isClosed}
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', JSON.stringify({ name: wUser, fromRole: role }));
+                              e.dataTransfer.effectAllowed = 'move';
+                              setDraggedMember({ name: wUser, fromRole: role });
+                            }}
+                            onDragEnd={() => {
+                              setDraggedMember(null);
+                              setDragOverRole(null);
+                            }}
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 border text-amber-200 text-[11px] select-none transition-all ${
+                              isBeingDragged
+                                ? 'opacity-40 border-dashed border-amber-400'
+                                : 'border-amber-500/30 hover:border-amber-400/60'
+                            } ${!isClosed ? 'cursor-grab active:cursor-grabbing' : ''}`}
                           >
-                            ×
-                          </button>
-                        </span>
-                      ))}
+                            {!isClosed && <GripVertical className="w-2.5 h-2.5 text-amber-400/60" />}
+                            <span className="text-[9px] text-amber-400/70 font-mono">Q{wIdx + 1}</span>
+                            <span>{wUser}</span>
+                            {!isClosed && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMoveModal({ name: wUser, currentRole: role });
+                                }}
+                                className="hover:text-indigo-300 text-amber-400/60 transition-colors p-0.5"
+                                title="Move to another squad"
+                              >
+                                <ArrowRightLeft className="w-2.5 h-2.5" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => onRemoveMember(wUser)}
+                              className="hover:text-rose-400 text-amber-400/60 transition-colors"
+                              title="Remove from waitlist"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -396,6 +603,85 @@ export const RosterView: React.FC<RosterViewProps> = ({
           );
         })}
       </div>
+
+      {/* Quick Move Member Modal */}
+      {moveModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#202329] border border-[#383e49] rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 animate-in fade-in">
+            <div className="flex items-center justify-between pb-3 border-b border-[#2e333d]">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <ArrowRightLeft className="w-4 h-4 text-indigo-400" />
+                  <span>Move Player to Squad</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Transfer <span className="text-indigo-300 font-semibold">{moveModal.name}</span> from{' '}
+                  <span className="text-slate-300 font-medium">{moveModal.currentRole}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => setMoveModal(null)}
+                className="text-slate-400 hover:text-white text-lg font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+              {roles.map((targetRole) => {
+                const isCurrent = targetRole === moveModal.currentRole;
+                const targetUsers = data[targetRole] || [];
+                const targetLimit = limits[targetRole] || 0;
+                const isTargetFull = targetUsers.length >= targetLimit;
+
+                return (
+                  <button
+                    key={targetRole}
+                    disabled={isCurrent || moving}
+                    onClick={async () => {
+                      setMoving(true);
+                      await onMoveMember(moveModal.name, targetRole);
+                      setMoving(false);
+                      setMoveModal(null);
+                    }}
+                    className={`w-full flex items-center justify-between p-3 rounded-xl border text-xs font-medium transition-all ${
+                      isCurrent
+                        ? 'bg-[#181a1f] border-slate-800 text-slate-500 opacity-60 cursor-not-allowed'
+                        : 'bg-[#1a1d22] border-[#2e333d] hover:border-indigo-500 hover:bg-indigo-950/25 text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-6 h-6 rounded bg-[#202329] flex items-center justify-center p-1">
+                        <RoleIcon role={targetRole} size="sm" />
+                      </div>
+                      <span className="font-semibold">{targetRole}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-[11px] font-mono ${
+                          isTargetFull ? 'text-amber-400 font-bold' : 'text-slate-400'
+                        }`}
+                      >
+                        {targetUsers.length}/{targetLimit} {isTargetFull ? '(Waitlist)' : ''}
+                      </span>
+                      {isCurrent && <span className="text-[10px] text-slate-500">(Current)</span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setMoveModal(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:bg-[#282c35] transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Manual Add Member Modal */}
       {isAddOpen && (

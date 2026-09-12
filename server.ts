@@ -20,6 +20,8 @@ import {
   postSiege,
   closeSiege,
   sendVoteReminder,
+  sendSiegeReminder,
+  giveAllMembersAllianceRole,
   getBenchHistory,
   getPriorityBenchUsers,
   restoreState,
@@ -269,7 +271,33 @@ async function startServer() {
     }
   });
 
-  // Manual Roster Management (Add/Remove member in web UI)
+  app.post('/api/actions/send-siege-reminder', async (req, res) => {
+    try {
+      const { customMessage } = req.body || {};
+      const result = await sendSiegeReminder(customMessage);
+      if (result && !result.success) {
+        return res.status(400).json(result);
+      }
+      res.json({
+        success: true,
+        message: result?.message || 'Vote reminder sent to registered Siege War participants',
+        details: result,
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err?.message || 'Failed to send Siege War reminders' });
+    }
+  });
+
+  app.post('/api/actions/assign-alliance-role', async (req, res) => {
+    try {
+      const result = await giveAllMembersAllianceRole();
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err?.message || 'Failed to assign Alliance role' });
+    }
+  });
+
+  // Manual Roster Management (Add/Remove/Move member in web UI)
   app.post('/api/roster/assign', async (req, res) => {
     try {
       const { type, role, name, id } = req.body;
@@ -284,6 +312,26 @@ async function startServer() {
       res.json(result);
     } catch (err: any) {
       res.status(500).json({ success: false, error: err?.message || 'Failed to assign member' });
+    }
+  });
+
+  app.post('/api/roster/move', async (req, res) => {
+    try {
+      const { type, nameOrId, toRole } = req.body;
+      if (!nameOrId || !toRole) {
+        return res.status(400).json({ success: false, error: 'Player name and target role are required' });
+      }
+      const session = type === 'siege' ? client.siegeSession : client.currentSession;
+      if (!session) {
+        return res.status(400).json({ success: false, error: 'No active session found' });
+      }
+      const result = session.moveMember(nameOrId, toRole);
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err?.message || 'Failed to move member' });
     }
   });
 

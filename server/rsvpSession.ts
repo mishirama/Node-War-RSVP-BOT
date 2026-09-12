@@ -588,8 +588,12 @@ export class RSVPSession {
       try {
         await interaction.update({ embeds: [mainEmb], components });
         updatedViaInteraction = true;
-      } catch (updateErr) {
-        log('WARN', `Fast-path interaction.update failed: ${updateErr}`);
+      } catch (updateErr: any) {
+        if (updateErr?.code === 10062) {
+          log('DEBUG', 'Fast-path interaction token expired (10062); will update via channel message.');
+        } else {
+          log('WARN', `Fast-path interaction.update failed: ${updateErr?.message || updateErr}`);
+        }
       }
     }
 
@@ -613,10 +617,27 @@ export class RSVPSession {
   }
 
   // Programmatic assignment from Web UI
-  assignMember(role: string, name: string, id: string = `web-${Date.now()}`) {
+  assignMember(role: string, name: string, id?: string) {
     if (this.isClosed) return { success: false, message: 'Session is closed' };
-    const member: MemberRecord = { id, name: name.trim() };
-    const user = member.name;
+    const user = name.trim();
+
+    // Preserve existing member ID if already registered
+    let memberId = id;
+    if (!memberId || memberId.startsWith('web-')) {
+      for (const r of Object.keys(this.limits)) {
+        const found = (this.memberData[r] || []).find((m) => m.name.toLowerCase() === user.toLowerCase()) ||
+                      (this.memberWaitlist[r] || []).find((m) => m.name.toLowerCase() === user.toLowerCase());
+        if (found?.id) {
+          memberId = found.id;
+          break;
+        }
+      }
+    }
+    if (!memberId) {
+      memberId = `web-${Date.now()}`;
+    }
+
+    const member: MemberRecord = { id: memberId, name: user };
 
     // Remove from existing roles
     for (const r of Object.keys(this.limits)) {
@@ -661,6 +682,68 @@ export class RSVPSession {
     this.saveState();
     this.triggerDiscordUpdate(100);
     return { success: true, status, message: `${user} added to ${role} (${status})` };
+  }
+
+  // Move a member from one squad/role to another
+  moveMember(nameOrId: string, toRole: string) {
+    if (this.isClosed) return { success: false, message: 'Session is closed' };
+    if (!this.limits[toRole] && this.limits[toRole] !== 0) {
+      return { success: false, message: `Invalid target role: ${toRole}` };
+    }
+
+    let foundMember: MemberRecord | null = null;
+    let fromRole: string | null = null;
+
+    // Search and remove from existing role
+    for (const r of Object.keys(this.limits)) {
+      const idx = this.findMemberIndex(this.data[r] || [], this.memberData[r] || [], nameOrId, nameOrId);
+      if (idx !== -1) {
+        foundMember = this.memberData[r]?.[idx] || { id: `web-${Date.now()}`, name: this.data[r][idx] };
+        fromRole = r;
+        this.data[r].splice(idx, 1);
+        if (this.memberData[r]?.length > idx) {
+          this.memberData[r].splice(idx, 1);
+        }
+        this.promoteWaitlist(r);
+        break;
+      }
+      const wIdx = this.findMemberIndex(this.waitlist[r] || [], this.memberWaitlist[r] || [], nameOrId, nameOrId);
+      if (wIdx !== -1) {
+        foundMember = this.memberWaitlist[r]?.[wIdx] || { id: `web-${Date.now()}`, name: this.waitlist[r][wIdx] };
+        fromRole = r;
+        this.waitlist[r].splice(wIdx, 1);
+        if (this.memberWaitlist[r]?.length > wIdx) {
+          this.memberWaitlist[r].splice(wIdx, 1);
+        }
+        break;
+      }
+    }
+
+    if (!foundMember) {
+      return { success: false, message: `Member "${nameOrId}" not found in current roster` };
+    }
+
+    // Insert into target role
+    let status = 'roster';
+    if (this.data[toRole].length < this.limits[toRole]) {
+      this.data[toRole].push(foundMember.name);
+      this.memberData[toRole].push(foundMember);
+    } else {
+      this.waitlist[toRole].push(foundMember.name);
+      this.memberWaitlist[toRole].push(foundMember);
+      status = 'waitlist';
+    }
+
+    this.saveState();
+    this.triggerDiscordUpdate(100);
+    return {
+      success: true,
+      fromRole,
+      toRole,
+      status,
+      name: foundMember.name,
+      message: `Moved ${foundMember.name} from ${fromRole} to ${toRole} (${status})`,
+    };
   }
 
   removeMember(nameOrId: string) {

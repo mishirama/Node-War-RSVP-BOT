@@ -274,6 +274,28 @@ export default function App() {
     }
   };
 
+  const handleMoveMember = async (nameOrId: string, toRole: string) => {
+    try {
+      const res = await fetch('/api/roster/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: rosterMode, nameOrId, toRole }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('success', data.message || `Moved ${nameOrId} to ${toRole}`);
+        await fetchSessions();
+        return true;
+      } else {
+        showToast('error', data.error || data.message || 'Failed to move member');
+        return false;
+      }
+    } catch (err: any) {
+      showToast('error', err?.message || 'Failed to move member');
+      return false;
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#17191d] flex flex-col items-center justify-center p-6 text-slate-300">
@@ -388,6 +410,7 @@ export default function App() {
             isClosed={isCurrentClosed}
             priorityUsers={priorityUsers}
             onAssignMember={handleAssignMember}
+            onMoveMember={handleMoveMember}
             onRemoveMember={handleRemoveMember}
             roleEmojis={roleEmojis}
           />

@@ -456,6 +456,160 @@ export async function sendVoteReminder(customMessage?: string) {
   };
 }
 
+export async function sendSiegeReminder(customMessage?: string) {
+  if (!client.isReady || !client.isReady()) {
+    log('WARN', 'Discord client not ready. Siege reminder skipped.');
+    return { success: false, reason: 'Discord bot client is not connected' };
+  }
+
+  const session = client.siegeSession;
+  if (!session) {
+    log('REMINDER', 'No Siege War session loaded. Reminder skipped.');
+    return { success: false, reason: 'No Siege War session is currently active' };
+  }
+
+  const channelId = CONFIG.SIEGE_CHANNEL_ID || CONFIG.CHANNEL_ID;
+  const channel = await client.channels.fetch(String(channelId || '0')).catch(() => null);
+  if (!channel || !channel.isTextBased()) {
+    log('ERROR', `Cannot send siege reminder: channel ${channelId} not found or not text-based.`);
+    return { success: false, reason: `Siege War channel ${channelId} not found` };
+  }
+
+  // Collect ONLY participants who registered for Siege War
+  const registeredUserIds = new Set<string>();
+
+  if (session.memberData) {
+    for (const members of Object.values(session.memberData)) {
+      if (Array.isArray(members)) {
+        for (const m of members) {
+          if (m?.id && /^\d{17,20}$/.test(m.id)) {
+            registeredUserIds.add(m.id);
+          }
+        }
+      }
+    }
+  }
+
+  if (session.memberWaitlist) {
+    for (const members of Object.values(session.memberWaitlist)) {
+      if (Array.isArray(members)) {
+        for (const m of members) {
+          if (m?.id && /^\d{17,20}$/.test(m.id)) {
+            registeredUserIds.add(m.id);
+          }
+        }
+      }
+    }
+  }
+
+  const defaultMsg =
+    '⚔️ **Siege War In-Game Vote & Attendance Reminder**\nPlease **YES UP** at **Balenos Server** at **19:00 GMT+7**!\nMake sure you are geared, on time, and have submitted your vote in-game.';
+
+  const formattedMessage = customMessage?.trim() || defaultMsg;
+  const userIdsList = Array.from(registeredUserIds);
+
+  if (userIdsList.length === 0) {
+    await channel.send({
+      content: `🔔 **Siege War In-Game Vote Reminder**\n${formattedMessage}\n\n*(Notice: No participants currently registered on the Siege War roster).*`,
+      allowedMentions: { parse: [] },
+    });
+    log('REMINDER', `Siege War reminder sent (0 registered participants).`);
+    return {
+      success: true,
+      count: 0,
+      message: `Reminder sent to Siege War channel (0 participants currently registered)`,
+    };
+  }
+
+  const mentions = userIdsList.map((id) => `<@${id}>`);
+  const chunkSize = 40;
+
+  for (let i = 0; i < mentions.length; i += chunkSize) {
+    const chunkMentions = mentions.slice(i, i + chunkSize);
+    const chunkIds = userIdsList.slice(i, i + chunkSize);
+
+    let content = '';
+    if (i === 0) {
+      content = `🔔 **Siege War In-Game Vote Reminder**\n${formattedMessage}\n\n**Siege War Registered Participants (${userIdsList.length}):**\n${chunkMentions.join(' ')}`;
+    } else {
+      content = `**Siege War Participants (Continued):**\n${chunkMentions.join(' ')}`;
+    }
+
+    await channel.send({
+      content,
+      allowedMentions: {
+        users: chunkIds,
+        roles: [],
+        parse: [],
+      },
+    });
+  }
+
+  log('REMINDER', `Siege War vote reminder pinged ${userIdsList.length} registered participant(s).`);
+
+  return {
+    success: true,
+    count: userIdsList.length,
+    message: `Siege reminder sent! Pinged ${userIdsList.length} registered Siege War participant(s).`,
+  };
+}
+
+export async function giveAllMembersAllianceRole() {
+  if (!client.isReady || !client.isReady()) {
+    return { success: false, reason: 'Discord bot client is not connected' };
+  }
+  const guild = client.guilds.cache.get(String(CONFIG.SERVER_ID || '1543436950466330676'));
+  if (!guild) {
+    return { success: false, reason: 'Guild not found' };
+  }
+  const roleId = CONFIG.ALLIANCE_ROLE_ID || '1544708723912482896';
+  const role = guild.roles.cache.get(roleId) || (await guild.roles.fetch(roleId).catch(() => null));
+  if (!role) {
+    return { success: false, reason: `Alliance role ${roleId} not found in guild` };
+  }
+
+  const members = await guild.members.fetch();
+  let assignedCount = 0;
+  let alreadyHasCount = 0;
+  let errorCount = 0;
+  let errorReason = '';
+
+  for (const [, member] of members) {
+    if (member.user.bot) continue;
+    if (member.roles.cache.has(roleId)) {
+      alreadyHasCount++;
+      continue;
+    }
+    try {
+      await member.roles.add(role);
+      assignedCount++;
+    } catch (e: any) {
+      errorCount++;
+      if (!errorReason) errorReason = e?.message || String(e);
+      log('WARN', `Could not assign Alliance role to ${member.user.tag}: ${e?.message || e}`);
+    }
+  }
+
+  log(
+    'ROLE',
+    `Assigned Alliance role to ${assignedCount} members (${alreadyHasCount} already had it, ${errorCount} errors)`
+  );
+
+  return {
+    success: true,
+    assignedCount,
+    alreadyHasCount,
+    errorCount,
+    errorReason: errorCount > 0 ? errorReason : undefined,
+    totalMembers: members.size,
+    message: `Alliance role assigned to ${assignedCount} member(s). ${alreadyHasCount} already had the role.${
+      errorCount > 0
+        ? ` (${errorCount} could not be updated due to Discord role hierarchy: please ensure the bot role is dragged above the Alliance role in Server Settings > Roles)`
+        : ''
+    }`,
+  };
+}
+
 let schedulerTimer: NodeJS.Timeout | null = null;
 
 export function startScheduler() {
