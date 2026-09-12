@@ -557,19 +557,14 @@ client.on(Events.InteractionCreate, async (interaction: any) => {
 
     if (!interaction.isButton()) return;
 
-    // Fast-acknowledge within 50ms to strictly prevent Discord 3-second timeout
-    try {
-      if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferUpdate();
-      }
-    } catch (e) {
-      log('WARN', `Could not defer button interaction immediately: ${e}`);
-    }
-
     const role = CUSTOM_ID_TO_ROLE[interaction.customId];
     if (!role) {
       log('WARN', `Button customId ${interaction.customId} not recognized in CUSTOM_ID_TO_ROLE`);
-      await interaction.followUp({ content: '⚠️ Unknown RSVP option.', flags: MessageFlags.Ephemeral }).catch(() => {});
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ content: '⚠️ Unknown RSVP option.', flags: MessageFlags.Ephemeral }).catch(() => {});
+      } else {
+        await interaction.followUp({ content: '⚠️ Unknown RSVP option.', flags: MessageFlags.Ephemeral }).catch(() => {});
+      }
       return;
     }
 
@@ -604,26 +599,27 @@ client.on(Events.InteractionCreate, async (interaction: any) => {
     }
 
     if (!session) {
-      await interaction.followUp({
-        content: '⚠️ This RSVP session is no longer active. Please check the latest announcement.',
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '⚠️ This RSVP session is no longer active. Please check the latest announcement.',
+          flags: MessageFlags.Ephemeral,
+        }).catch(() => {});
+      } else {
+        await interaction.followUp({
+          content: '⚠️ This RSVP session is no longer active. Please check the latest announcement.',
+          flags: MessageFlags.Ephemeral,
+        }).catch(() => {});
+      }
       return;
     }
 
     // Dynamic message re-anchoring: update client message reference to the exact message the user clicked
     if (isSiege) {
-      if (client.siegeMainMsgId !== interaction.message.id) {
-        client.siegeMainMsg = interaction.message;
-        client.siegeMainMsgId = interaction.message.id;
-        session.saveState();
-      }
+      client.siegeMainMsg = interaction.message;
+      client.siegeMainMsgId = interaction.message.id;
     } else {
-      if (client.mainMsgId !== interaction.message.id) {
-        client.mainMsg = interaction.message;
-        client.mainMsgId = interaction.message.id;
-        session.saveState();
-      }
+      client.mainMsg = interaction.message;
+      client.mainMsgId = interaction.message.id;
     }
 
     await session.processRoleSelection(interaction, role);

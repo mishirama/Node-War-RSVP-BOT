@@ -256,7 +256,7 @@ export class RSVPSession {
   private _updatePending = false;
   private _updateInFlight = false;
 
-  triggerDiscordUpdate(delayMs = 750) {
+  triggerDiscordUpdate(delayMs = 100) {
     this._updatePending = true;
     if (this._updateTimer) clearTimeout(this._updateTimer);
     this._updateTimer = setTimeout(() => {
@@ -283,7 +283,7 @@ export class RSVPSession {
       );
 
       if (channelId !== '0') {
-        const ch = await this.client.channels.fetch(channelId).catch(() => null);
+        const ch = this.client.channels.cache.get(channelId) || await this.client.channels.fetch(channelId).catch(() => null);
         if (ch && ch.isTextBased()) {
           const mainMsgKey = this.messageKey('mainMsg');
           const mainMsgIdKey = this.messageKey('mainMsgId');
@@ -291,7 +291,7 @@ export class RSVPSession {
           const waitlistMsgIdKey = this.messageKey('waitlistMsgId');
 
           if (!this.client[mainMsgKey] && this.client[mainMsgIdKey]) {
-            this.client[mainMsgKey] = await ch.messages
+            this.client[mainMsgKey] = ch.messages.cache.get(this.client[mainMsgIdKey]) || await ch.messages
               .fetch(this.client[mainMsgIdKey])
               .catch((e: any) => {
                 log('WARN', `Could not fetch main message ${this.client[mainMsgIdKey]}: ${e?.message || e}`);
@@ -299,7 +299,7 @@ export class RSVPSession {
               });
           }
           if (!this.client[waitlistMsgKey] && this.client[waitlistMsgIdKey]) {
-            this.client[waitlistMsgKey] = await ch.messages
+            this.client[waitlistMsgKey] = ch.messages.cache.get(this.client[waitlistMsgIdKey]) || await ch.messages
               .fetch(this.client[waitlistMsgIdKey])
               .catch((e: any) => {
                 log('WARN', `Could not fetch waitlist message ${this.client[waitlistMsgIdKey]}: ${e?.message || e}`);
@@ -312,24 +312,32 @@ export class RSVPSession {
       const mainMsg = this.client[this.messageKey('mainMsg')];
       const waitlistMsg = this.client[this.messageKey('waitlistMsg')];
 
+      const edits: Promise<any>[] = [];
       if (mainMsg) {
-        await mainMsg.edit({ embeds: [mainEmb], components: this.buildComponents() }).catch((err: any) => {
-          log('ERROR', `Failed to edit main message: ${err?.message || err}`);
-          if (err?.code === 10008) {
-            // Message was deleted or invalid; clear stale cache
-            this.client[this.messageKey('mainMsg')] = null;
-            this.client[this.messageKey('mainMsgId')] = null;
-          }
-        });
+        edits.push(
+          mainMsg.edit({ embeds: [mainEmb], components: this.buildComponents() }).catch((err: any) => {
+            log('ERROR', `Failed to edit main message: ${err?.message || err}`);
+            if (err?.code === 10008) {
+              // Message was deleted or invalid; clear stale cache
+              this.client[this.messageKey('mainMsg')] = null;
+              this.client[this.messageKey('mainMsgId')] = null;
+            }
+          })
+        );
       }
       if (waitlistMsg) {
-        await waitlistMsg.edit({ embeds: [waitEmb] }).catch((err: any) => {
-          log('ERROR', `Failed to edit waitlist message: ${err?.message || err}`);
-          if (err?.code === 10008) {
-            this.client[this.messageKey('waitlistMsg')] = null;
-            this.client[this.messageKey('waitlistMsgId')] = null;
-          }
-        });
+        edits.push(
+          waitlistMsg.edit({ embeds: [waitEmb] }).catch((err: any) => {
+            log('ERROR', `Failed to edit waitlist message: ${err?.message || err}`);
+            if (err?.code === 10008) {
+              this.client[this.messageKey('waitlistMsg')] = null;
+              this.client[this.messageKey('waitlistMsgId')] = null;
+            }
+          })
+        );
+      }
+      if (edits.length > 0) {
+        await Promise.all(edits);
       }
       this.saveState();
       log('SUCCESS', `RSVP Embeds updated on Discord for ${this.sessionType}.`);
@@ -338,13 +346,13 @@ export class RSVPSession {
     } finally {
       this._updateInFlight = false;
       if (this._updatePending) {
-        this.triggerDiscordUpdate(750);
+        this.triggerDiscordUpdate(100);
       }
     }
   }
 
   async batchUpdateDiscord() {
-    this.triggerDiscordUpdate(300);
+    this.triggerDiscordUpdate(50);
   }
 
   findMemberIndex(
@@ -413,23 +421,25 @@ export class RSVPSession {
 
     if (promotedNames.length > 0) {
       this.saveState();
-      this.triggerDiscordUpdate(500);
+      this.triggerDiscordUpdate(100);
     }
     return promotedNames;
   }
 
   async processRoleSelection(interaction: ButtonInteraction, role: string) {
     if (this.isClosed) {
-      await interaction.followUp({
-        content: '🔒 This RSVP is currently closed.',
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '🔒 This RSVP is currently closed.',
+          flags: MessageFlags.Ephemeral,
+        }).catch(() => {});
+      } else {
+        await interaction.followUp({
+          content: '🔒 This RSVP is currently closed.',
+          flags: MessageFlags.Ephemeral,
+        }).catch(() => {});
+      }
       return;
-    }
-
-    // Ensure interaction is acknowledged immediately
-    if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferUpdate().catch(() => {});
     }
 
     const userId = interaction.user.id;
@@ -445,10 +455,17 @@ export class RSVPSession {
         displayName
       );
       if (currentRoleIdx !== -1) {
-        await interaction.followUp({
-          content: `ℹ️ You are already registered for **${role}**!`,
-          flags: MessageFlags.Ephemeral,
-        }).catch(() => {});
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: `ℹ️ You are already registered for **${role}**!`,
+            flags: MessageFlags.Ephemeral,
+          }).catch(() => {});
+        } else {
+          await interaction.followUp({
+            content: `ℹ️ You are already registered for **${role}**!`,
+            flags: MessageFlags.Ephemeral,
+          }).catch(() => {});
+        }
         return;
       }
 
@@ -459,10 +476,17 @@ export class RSVPSession {
         displayName
       );
       if (currentWaitIdx !== -1) {
-        await interaction.followUp({
-          content: `ℹ️ You are already on the **${role}** waitlist (Position #${currentWaitIdx + 1}).`,
-          flags: MessageFlags.Ephemeral,
-        }).catch(() => {});
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: `ℹ️ You are already on the **${role}** waitlist (Position #${currentWaitIdx + 1}).`,
+            flags: MessageFlags.Ephemeral,
+          }).catch(() => {});
+        } else {
+          await interaction.followUp({
+            content: `ℹ️ You are already on the **${role}** waitlist (Position #${currentWaitIdx + 1}).`,
+            flags: MessageFlags.Ephemeral,
+          }).catch(() => {});
+        }
         return;
       }
     }
@@ -470,6 +494,7 @@ export class RSVPSession {
     // 2. Remove user from any previous roles or waitlists they may have had
     let removedFromRole: string | null = null;
     let wasWaitlisted = false;
+    let waitlistPromoted = false;
 
     for (const r of Object.keys(this.limits)) {
       // Check active roster
@@ -488,7 +513,10 @@ export class RSVPSession {
         wasWaitlisted = false;
 
         // Immediately promote the next player from waitlist into this role
-        this.promoteWaitlist(r);
+        const promoted = this.promoteWaitlist(r);
+        if (promoted.length > 0) {
+          waitlistPromoted = true;
+        }
       }
 
       // Check waitlist queue
@@ -508,62 +536,79 @@ export class RSVPSession {
       }
     }
 
+    // Prepare feedback message
+    let feedback = '';
+
     // 3. Handle Cancel action
     if (role === 'Cancel') {
-      this.saveState();
-      this.triggerDiscordUpdate(500);
-
       if (removedFromRole) {
         if (wasWaitlisted) {
-          await interaction.followUp({
-            content: `❌ You have been removed from the **${removedFromRole}** waitlist.`,
-            flags: MessageFlags.Ephemeral,
-          }).catch(() => {});
+          feedback = `❌ You have been removed from the **${removedFromRole}** waitlist.`;
         } else {
-          await interaction.followUp({
-            content: `❌ You have cancelled your registration for **${removedFromRole}**. If someone was on the waitlist, they have been promoted to fill the slot!`,
-            flags: MessageFlags.Ephemeral,
-          }).catch(() => {});
+          feedback = `❌ You have cancelled your registration for **${removedFromRole}**.`;
         }
       } else {
-        await interaction.followUp({
-          content: 'ℹ️ You are not currently registered for any role.',
-          flags: MessageFlags.Ephemeral,
-        }).catch(() => {});
+        feedback = 'ℹ️ You are not currently registered for any role.';
       }
-      return;
+    } else {
+      // 4. Handle Role Join (e.g. Main Ball or specialized roles)
+      const limit = this.limits[role] || 0;
+      if (!this.data[role]) this.data[role] = [];
+      if (!this.memberData[role]) this.memberData[role] = [];
+      if (!this.waitlist[role]) this.waitlist[role] = [];
+      if (!this.memberWaitlist[role]) this.memberWaitlist[role] = [];
+
+      if (this.data[role].length < limit) {
+        // Slot available -> Add to Active Roster
+        this.data[role].push(displayName);
+        this.memberData[role].push(member);
+        feedback = `✅ You have successfully registered for **${role}**! (${this.data[role].length}/${limit})`;
+      } else {
+        // Role is Full -> Place on Waitlist
+        this.waitlist[role].push(displayName);
+        this.memberWaitlist[role].push(member);
+        const position = this.waitlist[role].length;
+        feedback = `⚠️ **${role}** is currently full (${this.data[role].length}/${limit}). You have been placed on the **Waitlist** (Position #${position}). If a slot opens up, you will automatically be promoted!`;
+      }
     }
 
-    // 4. Handle Role Join (e.g. Main Ball or specialized roles)
-    const limit = this.limits[role] || 0;
-    if (!this.data[role]) this.data[role] = [];
-    if (!this.memberData[role]) this.memberData[role] = [];
-    if (!this.waitlist[role]) this.waitlist[role] = [];
-    if (!this.memberWaitlist[role]) this.memberWaitlist[role] = [];
+    // Cache message reference immediately
+    this.client[this.messageKey('mainMsg')] = interaction.message;
+    this.client[this.messageKey('mainMsgId')] = interaction.message.id;
 
-    if (this.data[role].length < limit) {
-      // Slot available -> Add to Active Roster
-      this.data[role].push(displayName);
-      this.memberData[role].push(member);
-      this.saveState();
-      this.triggerDiscordUpdate(500);
+    // Save state non-blockingly
+    this.saveState();
 
-      await interaction.followUp({
-        content: `✅ You have successfully registered for **${role}**! (${this.data[role].length}/${limit})`,
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
-    } else {
-      // Role is Full -> Place on Waitlist
-      this.waitlist[role].push(displayName);
-      this.memberWaitlist[role].push(member);
-      const position = this.waitlist[role].length;
-      this.saveState();
-      this.triggerDiscordUpdate(500);
+    // Fast-path: Update Discord message directly via interaction callback (ZERO DELAY!)
+    const { mainEmb } = this.buildEmbeds();
+    const components = this.buildComponents();
+    let updatedViaInteraction = false;
 
-      await interaction.followUp({
-        content: `⚠️ **${role}** is currently full (${this.data[role].length}/${limit}). You have been placed on the **Waitlist** (Position #${position}). If any registered player cancels their vote, you will automatically be pushed into **${role}**!`,
-        flags: MessageFlags.Ephemeral,
-      }).catch(() => {});
+    if (!interaction.replied && !interaction.deferred) {
+      try {
+        await interaction.update({ embeds: [mainEmb], components });
+        updatedViaInteraction = true;
+      } catch (updateErr) {
+        log('WARN', `Fast-path interaction.update failed: ${updateErr}`);
+      }
+    }
+
+    // Deliver ephemeral confirmation popup
+    if (feedback) {
+      try {
+        if (updatedViaInteraction || interaction.deferred) {
+          await interaction.followUp({ content: feedback, flags: MessageFlags.Ephemeral });
+        } else if (!interaction.replied) {
+          await interaction.reply({ content: feedback, flags: MessageFlags.Ephemeral });
+        }
+      } catch {
+        // Non-fatal if ephemeral confirmation fails to deliver
+      }
+    }
+
+    // If waitlist changed or fast-path didn't execute, trigger rapid background update (50ms)
+    if (!updatedViaInteraction || waitlistPromoted || this.client[this.messageKey('waitlistMsgId')]) {
+      this.triggerDiscordUpdate(50);
     }
   }
 
@@ -595,7 +640,7 @@ export class RSVPSession {
 
     if (role === 'Cancel') {
       this.saveState();
-      this.triggerDiscordUpdate(500);
+      this.triggerDiscordUpdate(100);
       return { success: true, message: `Removed ${user}` };
     }
 
@@ -614,7 +659,7 @@ export class RSVPSession {
     }
 
     this.saveState();
-    this.triggerDiscordUpdate(500);
+    this.triggerDiscordUpdate(100);
     return { success: true, status, message: `${user} added to ${role} (${status})` };
   }
 
@@ -641,7 +686,7 @@ export class RSVPSession {
     }
     if (removed) {
       this.saveState();
-      this.triggerDiscordUpdate(500);
+      this.triggerDiscordUpdate(100);
     }
     return removed;
   }
