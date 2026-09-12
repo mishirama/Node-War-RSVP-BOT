@@ -1,26 +1,40 @@
-# Hosting on Wispbyte (Pterodactyl / Node.js)
+# Hosting on Wispbyte (Node.js / Pterodactyl)
 
-This guide walks you through deploying this Discord Bot + Web Dashboard on **Wispbyte** (or any Pterodactyl-based host).
+This bot is **100% standalone** and connects directly to the **Discord Gateway via discord.js**.
+- **NO Gemini API or Google AI keys required**: Everything runs on local rules, Discord buttons, and scheduled timers.
+- **Discord Bot Token ONLY**: You only need your Discord Bot Token to run on Wispbyte.
 
 ---
 
-## 1. Export Your Code from AI Studio
+## 1. Get Your Discord Bot Token & Required Intents
+1. Go to the [Discord Developer Portal](https://discord.com/developers/applications).
+2. Select your Bot application (or create one).
+3. Go to the **Bot** tab:
+   - Click **Reset Token** (or Copy Token).
+   - Under **Privileged Gateway Intents**, turn **ON**:
+     - ✅ **Server Members Intent** (Required for reading members & assigning Alliance roles)
+     - ✅ **Message Content Intent**
+4. Save changes.
+
+---
+
+## 2. Export Your Code from AI Studio
 1. In Google AI Studio, click the **Settings / Menu** icon (top-right).
 2. Select **Export to GitHub** or **Download as ZIP**.
-3. If downloading as ZIP, extract it on your computer.
+3. If downloading as a ZIP, extract it on your local machine.
 
 ---
 
-## 2. Prepare Your Wispbyte Server
+## 3. Prepare Your Wispbyte Server
 1. Go to your **Wispbyte Game/Bot Panel**.
-2. Create or select your **Node.js Bot Server** (Node.js 18 or 20+ recommended).
-3. If Wispbyte offers server location options, choose a **US location** (e.g. US East or US Central) to get **low Discord Gateway ping (20–60ms)**!
+2. Select your **Node.js Bot Server** (Node.js 18 or 20+).
+3. If Wispbyte offers location selection, choose **US or Singapore** for low ping to Discord's gateway.
 
 ---
 
-## 3. Upload Files
+## 4. Upload Files
 1. Open the **Files** tab in your Wispbyte panel (or connect via SFTP).
-2. Upload all the files from this project:
+2. Upload all project files:
    - `src/`
    - `server/`
    - `public/`
@@ -30,29 +44,53 @@ This guide walks you through deploying this Discord Bot + Web Dashboard on **Wis
    - `vite.config.ts`
    - `index.html`
    - `index.js`
-   - `config.json` (contains your bot settings)
-   *(Note: Do not upload `node_modules` – they will install automatically).*
+   - `config.json`
+   *(Do NOT upload `node_modules` — they will install automatically).*
 
 ---
 
-## 4. Set Environment Variables
-In your Wispbyte panel (under **Startup** or create a `.env` file in the root):
+## 5. Set Your Discord Bot Token
+Choose whichever method is easiest on Wispbyte:
+
+### Method A: Create a `.env` file (Recommended)
+In the file manager, create a file named `.env` in the root folder with:
 ```env
 DISCORD_TOKEN=your_bot_token_here
-PORT=3000
 ```
-*(Optional: If your Wispbyte server assigns you a specific port like `25565` or `8080`, set `PORT` to that port number).*
+
+### Method B: Wispbyte Environment Variables
+In your Wispbyte server's **Startup** or **Environment** tab, set:
+- Variable: `DISCORD_TOKEN` (or `TOKEN`)
+- Value: `your_bot_token_here`
+
+### Method C: Put it in `config.json`
+You can also directly add it into `config.json`:
+```json
+{
+    "TOKEN": "your_bot_token_here",
+    "SERVER_ID": "1543436950466330676",
+    ...
+}
+```
 
 ---
 
-## 5. Startup Configuration
-In Wispbyte's **Startup** tab:
-- **Build Command / Pre-Run**: `npm install && npm run build`
+## 6. Startup Configuration on Wispbyte
+In the **Startup** tab:
+- **Build / Pre-Run**: `npm install && npm run build`
 - **Startup Command**: `npm start` (or `node index.js`)
 - **Main File**: `index.js`
 
 ---
 
-## 6. Start the Server
-1. In the **Console** tab, click **Start**.
-2. The server will run `npm start`, connect to Discord with your token, and launch the web dashboard!
+## 7. Start the Server
+1. Go to the **Console** tab and click **Start**.
+2. You will see:
+   ```
+   [HOST] Starting BDO Node War & Siege War Discord Bot
+   [HOST] Mode: Standalone Discord Bot (No Gemini API needed; pure Discord Gateway)
+   [BOT] Logging into Discord Gateway with provided token...
+   [BOT] Discord client connected successfully as [YourBot#Tag]
+   ```
+3. Your bot is now 24/7 online in your Discord server! All slash commands (`/open-node-war`, `/close-rsvp`, `/open-siege`), button interactions, and automated daily timers will run continuously.
+

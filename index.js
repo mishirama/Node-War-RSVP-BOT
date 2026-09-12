@@ -7,6 +7,15 @@ import { execSync, spawn } from 'node:child_process';
 const require = createRequire(import.meta.url);
 process.env.NODE_ENV = process.env.NODE_ENV || 'production';
 
+// Pre-load .env if available
+try {
+  const dotenv = require('dotenv');
+  dotenv.config();
+} catch {}
+
+console.log('[HOST] Starting BDO Node War & Siege War Discord Bot');
+console.log('[HOST] Mode: Standalone Discord Bot (No Gemini API needed; pure Discord Gateway)');
+
 const distServer = path.join(process.cwd(), 'dist', 'server.cjs');
 const rootServer = path.join(process.cwd(), 'server.cjs');
 

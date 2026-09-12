@@ -11,6 +11,7 @@ import {
   saveConfig,
   log,
   recentLogs,
+  getDiscordToken,
 } from './server/config.js';
 import { getCapacityWarnings, getLimits, getSiegeLimits } from './server/utils.js';
 import {
@@ -91,7 +92,7 @@ async function startServer() {
         isReady: isBotReady,
         tag: isBotReady ? client.user?.tag : null,
         ping: isBotReady && typeof client.ws?.ping === 'number' && client.ws.ping >= 0 ? client.ws.ping : null,
-        hasToken: Boolean(process.env.DISCORD_TOKEN),
+        hasToken: Boolean(getDiscordToken()),
         region: 'asia-southeast1 (Singapore)',
       },
       currentGuild: guild ? { id: guild.id, name: guild.name } : null,
@@ -388,12 +389,16 @@ async function startServer() {
 
   // Bot Login trigger if token added or changed
   app.post('/api/bot/login', async (req, res) => {
-    const token = req.body?.token || process.env.DISCORD_TOKEN;
+    const token = (req.body?.token || getDiscordToken()).trim();
     if (!token) {
       return res.status(400).json({ success: false, error: 'No Discord token provided' });
     }
     try {
       process.env.DISCORD_TOKEN = token;
+      if (req.body?.saveToConfig) {
+        CONFIG.TOKEN = token;
+        saveConfig();
+      }
       if (!client.isReady || !client.isReady()) {
         await client.login(token);
         log('BOT', 'Discord client connected successfully.');
@@ -446,7 +451,7 @@ async function startServer() {
   });
 
   // Attempt Discord bot login if token exists
-  const token = process.env.DISCORD_TOKEN;
+  const token = getDiscordToken();
   if (token) {
     try {
       log('BOT', 'Logging into Discord Gateway with provided token...');
@@ -455,7 +460,7 @@ async function startServer() {
       log('ERROR', `Discord login error on startup: ${err}`);
     }
   } else {
-    log('BOT', 'No DISCORD_TOKEN found in environment. Bot is in Standby/Dashboard mode.');
+    log('BOT', 'No DISCORD_TOKEN found in environment or config. Bot is in Standby/Dashboard mode.');
   }
 }
 

@@ -17,6 +17,7 @@ import {
   HISTORY_FILE,
   JAKARTA_TZ,
   log,
+  getDiscordToken,
 } from './config.js';
 import { CUSTOM_ID_TO_ROLE, SIEGE_ROLE_BUTTONS } from './constants.js';
 import { getLimits, getSiegeLimits, isAuthorized } from './utils.js';
@@ -71,7 +72,7 @@ const SLASH_COMMANDS = [
 ].map((command) => command.toJSON());
 
 export async function registerSlashCommands(token?: string) {
-  const activeToken = token || process.env.DISCORD_TOKEN;
+  const activeToken = token || getDiscordToken();
   if (!activeToken || !CONFIG.SERVER_ID || !client.user?.id) return false;
   try {
     const rest = new REST({ version: '10' }).setToken(activeToken);

@@ -12,6 +12,10 @@ import {
   Terminal,
   Server,
   Layers,
+  Key,
+  Cpu,
+  CheckCircle2,
+  ExternalLink,
 } from 'lucide-react';
 
 interface BotConfigViewProps {
@@ -51,6 +55,71 @@ export const BotConfigView: React.FC<BotConfigViewProps> = ({
 
   return (
     <form onSubmit={handleSave} className="space-y-6">
+      {/* Standalone Hosting & Token Banner */}
+      <div className="bg-[#202329] border border-indigo-500/30 rounded-2xl p-5 sm:p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#2d323b]">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">
+              <Key className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-white">Standalone Bot & Token Configuration</h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                  No Gemini API Needed
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Powered 100% by native Discord.js WebSocket Gateway. Deployable on Wispbyte, Pterodactyl, or any Node.js host.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-block w-2.5 h-2.5 rounded-full ${
+                status?.bot.isReady ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+              }`}
+            />
+            <span className="text-xs font-mono font-bold text-slate-200">
+              {status?.bot.isReady ? status.bot.tag : status?.bot.hasToken ? 'Connecting...' : 'Token Required'}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 text-xs">
+          <div className="p-3.5 rounded-xl bg-[#17191d] border border-[#2d323b] space-y-1.5">
+            <div className="font-bold text-slate-200 flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span>Zero External AI Dependencies</span>
+            </div>
+            <p className="text-slate-400 leading-relaxed text-[11px]">
+              No Google Gemini API key or billing required. All reminders, timers, capacity checks, and embeds run completely offline & local.
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-[#17191d] border border-[#2d323b] space-y-1.5">
+            <div className="font-bold text-slate-200 flex items-center gap-1.5">
+              <Key className="w-4 h-4 text-indigo-400" />
+              <span>Token Resolution Order</span>
+            </div>
+            <p className="text-slate-400 leading-relaxed text-[11px]">
+              Automatically checks <code className="text-indigo-300 font-mono">.env</code> (<code className="text-indigo-300 font-mono">DISCORD_TOKEN</code>), host environment variables, and <code className="text-indigo-300 font-mono">config.json</code>.
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-[#17191d] border border-[#2d323b] space-y-1.5">
+            <div className="font-bold text-slate-200 flex items-center gap-1.5">
+              <Cpu className="w-4 h-4 text-amber-400" />
+              <span>Wispbyte / Pterodactyl Ready</span>
+            </div>
+            <p className="text-slate-400 leading-relaxed text-[11px]">
+              Start script configured to <code className="text-amber-300 font-mono">npm start</code> (runs <code className="text-amber-300 font-mono">node index.js</code>). Handles auto-recovery and 24/7 background operation.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Bot & Gateway Connection Info */}
       <div className="bg-[#202329] border border-[#343943] rounded-2xl p-5 sm:p-6 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#2d323b]">

@@ -89,16 +89,6 @@ export function loadConfig(): Record<string, string> {
   }
   try {
     const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-    let changed = false;
-    for (const legacyKey of ['TOKEN', 'WEB_PASSWORD']) {
-      if (Object.hasOwn(config, legacyKey)) {
-        delete config[legacyKey];
-        changed = true;
-      }
-    }
-    if (changed) {
-      fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 4));
-    }
     return { ...DEFAULT_CONFIG, ...config };
   } catch {
     return { ...DEFAULT_CONFIG };
@@ -106,6 +96,26 @@ export function loadConfig(): Record<string, string> {
 }
 
 export const CONFIG = loadConfig();
+
+/**
+ * Resolves the Discord Bot Token from environment variables (.env / Wispbyte panel)
+ * or config.json. No Gemini API or external AI keys needed.
+ */
+export function getDiscordToken(): string {
+  const token = (
+    process.env.DISCORD_TOKEN ||
+    process.env.TOKEN ||
+    process.env.BOT_TOKEN ||
+    CONFIG.DISCORD_TOKEN ||
+    CONFIG.TOKEN ||
+    ''
+  ).trim();
+
+  if (token && !process.env.DISCORD_TOKEN) {
+    process.env.DISCORD_TOKEN = token;
+  }
+  return token;
+}
 
 export function saveConfig() {
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(CONFIG, null, 4));
