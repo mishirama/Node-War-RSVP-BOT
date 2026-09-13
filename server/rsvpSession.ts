@@ -11,7 +11,15 @@ import {
   MessageFlags,
 } from 'discord.js';
 import { CONFIG, DATA_FILE, log } from './config.js';
-import { ROLE_EMOJIS, DAY_KEYS, ROLE_BUTTONS, formatDiscordRoleEmoji } from './constants.js';
+import {
+  ROLE_EMOJIS,
+  DAY_KEYS,
+  ROLE_BUTTONS,
+  formatDiscordRoleEmoji,
+  DEFAULT_ROLE_LIMITS,
+  DEFAULT_SIEGE_ROLE_LIMITS,
+  getCanonicalRoles,
+} from './constants.js';
 import { notifySessionUpdate } from './events.js';
 
 export interface MemberRecord {
@@ -72,8 +80,79 @@ export class RSVPSession {
       : name;
   }
 
+  sanitizeData() {
+    const isInvalid = (name: any) => {
+      if (!name) return true;
+      const t = String(name || '').replace(/^[•\-\*\s]+/, '').trim();
+      return (
+        !t ||
+        t === '-' ||
+        t === '—' ||
+        t === '–' ||
+        t.toLowerCase() === 'none' ||
+        t.toLowerCase().includes('no players') ||
+        t.toLowerCase().includes('no backups')
+      );
+    };
+    for (const role of Object.keys(this.data)) {
+      if (Array.isArray(this.data[role])) {
+        this.data[role] = this.data[role]
+          .filter((n) => !isInvalid(n))
+          .map((n) => String(n).replace(/^[•\-\*\s]+/, '').trim());
+      }
+      if (Array.isArray(this.memberData[role])) {
+        this.memberData[role] = this.memberData[role]
+          .filter((m) => m && !isInvalid(m.name))
+          .map((m) => ({ ...m, name: String(m.name).replace(/^[•\-\*\s]+/, '').trim() }));
+      }
+    }
+    for (const role of Object.keys(this.waitlist)) {
+      if (Array.isArray(this.waitlist[role])) {
+        this.waitlist[role] = this.waitlist[role]
+          .filter((n) => !isInvalid(n))
+          .map((n) => String(n).replace(/^[•\-\*\s]+/, '').trim());
+      }
+      if (Array.isArray(this.memberWaitlist[role])) {
+        this.memberWaitlist[role] = this.memberWaitlist[role]
+          .filter((m) => m && !isInvalid(m.name))
+          .map((m) => ({ ...m, name: String(m.name).replace(/^[•\-\*\s]+/, '').trim() }));
+      }
+    }
+  }
+
   saveState() {
     try {
+      this.sanitizeData();
+      const canonicalRoles = getCanonicalRoles(
+        this.sessionType,
+        Array.from(new Set([...Object.keys(this.limits), ...Object.keys(this.data)]))
+      );
+
+      const orderedData: Record<string, string[]> = {};
+      const orderedWaitlist: Record<string, string[]> = {};
+      const orderedMemberData: Record<string, MemberRecord[]> = {};
+      const orderedMemberWaitlist: Record<string, MemberRecord[]> = {};
+
+      for (const r of canonicalRoles) {
+        if (this.data[r] !== undefined || this.limits[r] !== undefined) {
+          orderedData[r] = this.data[r] || [];
+        }
+        if (this.waitlist[r] !== undefined || this.limits[r] !== undefined) {
+          orderedWaitlist[r] = this.waitlist[r] || [];
+        }
+        if (this.memberData[r] !== undefined || this.limits[r] !== undefined) {
+          orderedMemberData[r] = this.memberData[r] || [];
+        }
+        if (this.memberWaitlist[r] !== undefined || this.limits[r] !== undefined) {
+          orderedMemberWaitlist[r] = this.memberWaitlist[r] || [];
+        }
+      }
+
+      this.data = orderedData;
+      this.waitlist = orderedWaitlist;
+      this.memberData = orderedMemberData;
+      this.memberWaitlist = orderedMemberWaitlist;
+
       fs.writeFileSync(
         this.dataFile,
         JSON.stringify(
@@ -100,6 +179,7 @@ export class RSVPSession {
   }
 
   buildEmbeds() {
+    this.sanitizeData();
     const color = this.isClosed ? 0xed4245 : 0x5865f2;
     const weekday = this.targetDate.getDay();
     const dayPrefix = DAY_KEYS[weekday] || 'MON';
@@ -114,8 +194,22 @@ export class RSVPSession {
       )
       .setColor(color);
 
-    for (const [role, users] of Object.entries(this.data)) {
+    const isInvalid = (n: any) => {
+      if (!n) return true;
+      const t = String(n).replace(/^[•\-\*\s]+/, '').trim();
+      return !t || t === '-' || t === '—' || t === '–' || t.toLowerCase() === 'none';
+    };
+
+    const canonicalRoles = getCanonicalRoles(
+      this.sessionType,
+      Array.from(new Set([...Object.keys(this.limits), ...Object.keys(this.data)]))
+    );
+
+    for (const role of canonicalRoles) {
       const limit = this.limits[role] ?? 0;
+      const rawUsers = this.data[role] || [];
+      const users = (rawUsers || []).filter((u) => !isInvalid(u));
+
       if (!users.length) {
         mainEmb.addFields({
           name: `${formatDiscordRoleEmoji(role)} ${role} (0/${limit})`,
@@ -160,14 +254,14 @@ export class RSVPSession {
       });
     }
 
-    const totalReg = Object.values(this.data).reduce((a, arr) => a + arr.length, 0);
+    const totalReg = Object.values(this.data).reduce((a, arr) => a + (arr || []).filter((u) => !isInvalid(u)).length, 0);
     mainEmb.addFields({
       name: '📊 Summary',
       value: `**Total Registered: ${totalReg}/${totalSlots}**`,
       inline: false,
     });
 
-    const anyWaitlist = Object.values(this.waitlist).some((arr) => arr.length);
+    const anyWaitlist = Object.values(this.waitlist).some((arr) => (arr || []).some((u) => !isInvalid(u)));
     const waitEmb = new EmbedBuilder()
       .setTitle('📋 Waitlist / Backups')
       .setColor(0xfaa61a);
@@ -178,7 +272,9 @@ export class RSVPSession {
       waitEmb.setDescription('No backups currently in queue.');
     }
 
-    for (const [role, users] of Object.entries(this.waitlist)) {
+    for (const role of canonicalRoles) {
+      const rawUsers = this.waitlist[role] || [];
+      const users = (rawUsers || []).filter((u) => !isInvalid(u));
       if (!users.length) continue;
 
       const userChunks: string[][] = [];
@@ -255,9 +351,15 @@ export class RSVPSession {
   private _updateTimer: NodeJS.Timeout | null = null;
   private _updatePending = false;
   private _updateInFlight = false;
+  private _skipMainMsgEdit = false;
 
-  triggerDiscordUpdate(delayMs = 100) {
+  triggerDiscordUpdate(delayMs = 100, skipMainMsg = false) {
     this._updatePending = true;
+    if (skipMainMsg) {
+      this._skipMainMsgEdit = true;
+    } else {
+      this._skipMainMsgEdit = false;
+    }
     if (this._updateTimer) clearTimeout(this._updateTimer);
     this._updateTimer = setTimeout(() => {
       this._updateTimer = null;
@@ -271,6 +373,8 @@ export class RSVPSession {
     }
     this._updateInFlight = true;
     this._updatePending = false;
+    const skipMain = this._skipMainMsgEdit;
+    this._skipMainMsgEdit = false;
 
     try {
       if (!this.client?.isReady || !this.client.isReady()) {
@@ -290,19 +394,35 @@ export class RSVPSession {
           const waitlistMsgKey = this.messageKey('waitlistMsg');
           const waitlistMsgIdKey = this.messageKey('waitlistMsgId');
 
-          if (!this.client[mainMsgKey] && this.client[mainMsgIdKey]) {
-            this.client[mainMsgKey] = ch.messages.cache.get(this.client[mainMsgIdKey]) || await ch.messages
-              .fetch(this.client[mainMsgIdKey])
+          let mainMsgId = this.client[mainMsgIdKey];
+          if (!mainMsgId && fs.existsSync(this.dataFile)) {
+            try {
+              const saved = JSON.parse(fs.readFileSync(this.dataFile, 'utf-8'));
+              mainMsgId = saved.main_msg_id;
+              if (mainMsgId) this.client[mainMsgIdKey] = mainMsgId;
+            } catch {}
+          }
+          if (mainMsgId) {
+            this.client[mainMsgKey] = ch.messages.cache.get(mainMsgId) || await ch.messages
+              .fetch(mainMsgId)
               .catch((e: any) => {
-                log('WARN', `Could not fetch main message ${this.client[mainMsgIdKey]}: ${e?.message || e}`);
+                log('WARN', `Could not fetch main message ${mainMsgId}: ${e?.message || e}`);
                 return null;
               });
           }
-          if (!this.client[waitlistMsgKey] && this.client[waitlistMsgIdKey]) {
-            this.client[waitlistMsgKey] = ch.messages.cache.get(this.client[waitlistMsgIdKey]) || await ch.messages
-              .fetch(this.client[waitlistMsgIdKey])
+          let waitlistMsgId = this.client[waitlistMsgIdKey];
+          if (!waitlistMsgId && fs.existsSync(this.dataFile)) {
+            try {
+              const saved = JSON.parse(fs.readFileSync(this.dataFile, 'utf-8'));
+              waitlistMsgId = saved.waitlist_msg_id;
+              if (waitlistMsgId) this.client[waitlistMsgIdKey] = waitlistMsgId;
+            } catch {}
+          }
+          if (waitlistMsgId) {
+            this.client[waitlistMsgKey] = ch.messages.cache.get(waitlistMsgId) || await ch.messages
+              .fetch(waitlistMsgId)
               .catch((e: any) => {
-                log('WARN', `Could not fetch waitlist message ${this.client[waitlistMsgIdKey]}: ${e?.message || e}`);
+                log('WARN', `Could not fetch waitlist message ${waitlistMsgId}: ${e?.message || e}`);
                 return null;
               });
           }
@@ -313,12 +433,12 @@ export class RSVPSession {
       const waitlistMsg = this.client[this.messageKey('waitlistMsg')];
 
       const edits: Promise<any>[] = [];
-      if (mainMsg) {
+      if (mainMsg && !skipMain) {
         edits.push(
           mainMsg.edit({ embeds: [mainEmb], components: this.buildComponents() }).catch((err: any) => {
             log('ERROR', `Failed to edit main message: ${err?.message || err}`);
-            if (err?.code === 10008) {
-              // Message was deleted or invalid; clear stale cache
+            if (err?.code === 10008 || err?.code === 50005) {
+              // Message was deleted, invalid, or authored by a different bot
               this.client[this.messageKey('mainMsg')] = null;
               this.client[this.messageKey('mainMsgId')] = null;
             }
@@ -329,7 +449,7 @@ export class RSVPSession {
         edits.push(
           waitlistMsg.edit({ embeds: [waitEmb] }).catch((err: any) => {
             log('ERROR', `Failed to edit waitlist message: ${err?.message || err}`);
-            if (err?.code === 10008) {
+            if (err?.code === 10008 || err?.code === 50005) {
               this.client[this.messageKey('waitlistMsg')] = null;
               this.client[this.messageKey('waitlistMsgId')] = null;
             }
@@ -338,9 +458,11 @@ export class RSVPSession {
       }
       if (edits.length > 0) {
         await Promise.all(edits);
+        log('SUCCESS', `RSVP Embeds updated on Discord for ${this.sessionType}.`);
+      } else {
+        log('DEBUG', `No message in memory to edit on Discord for ${this.sessionType}.`);
       }
       this.saveState();
-      log('SUCCESS', `RSVP Embeds updated on Discord for ${this.sessionType}.`);
     } catch (e) {
       log('ERROR', `Batch update failed: ${e}`);
     } finally {
@@ -392,6 +514,20 @@ export class RSVPSession {
     const rolesToCheck = specificRole ? [specificRole] : Object.keys(this.limits);
     const promotedNames: string[] = [];
 
+    const isInvalid = (name: any) => {
+      if (!name) return true;
+      const t = String(name || '').replace(/^[•\-\*\s]+/, '').trim();
+      return (
+        !t ||
+        t === '-' ||
+        t === '—' ||
+        t === '–' ||
+        t.toLowerCase() === 'none' ||
+        t.toLowerCase().includes('no players') ||
+        t.toLowerCase().includes('no backups')
+      );
+    };
+
     for (const r of rolesToCheck) {
       const limit = this.limits[r] || 0;
       if (!this.data[r]) this.data[r] = [];
@@ -399,10 +535,17 @@ export class RSVPSession {
       if (!this.waitlist[r]) this.waitlist[r] = [];
       if (!this.memberWaitlist[r]) this.memberWaitlist[r] = [];
 
+      // Clean invalid placeholders before checking limits
+      this.data[r] = this.data[r].filter((u) => !isInvalid(u));
+      this.memberData[r] = this.memberData[r].filter((m) => m && !isInvalid(m.name));
+      this.waitlist[r] = this.waitlist[r].filter((u) => !isInvalid(u));
+      this.memberWaitlist[r] = this.memberWaitlist[r].filter((m) => m && !isInvalid(m.name));
+
       while (this.data[r].length < limit && this.waitlist[r].length > 0) {
         const nextUser = this.waitlist[r].shift()!;
         let nextMember = this.memberWaitlist[r]?.length > 0 ? this.memberWaitlist[r].shift()! : null;
-        if (!nextMember || !nextMember.name) {
+        if (isInvalid(nextUser)) continue;
+        if (!nextMember || !nextMember.name || isInvalid(nextMember.name)) {
           nextMember = {
             id: `promoted-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
             name: nextUser,
@@ -427,6 +570,9 @@ export class RSVPSession {
   }
 
   async processRoleSelection(interaction: ButtonInteraction, role: string) {
+    // Keep data strictly sanitized before any interaction checks
+    this.sanitizeData();
+
     if (this.isClosed) {
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
@@ -541,22 +687,45 @@ export class RSVPSession {
 
     // 3. Handle Cancel action
     if (role === 'Cancel') {
-      if (removedFromRole) {
-        if (wasWaitlisted) {
-          feedback = `❌ You have been removed from the **${removedFromRole}** waitlist.`;
+      this.sanitizeData();
+      if (!removedFromRole) {
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'ℹ️ You are not currently registered for any role.',
+            flags: MessageFlags.Ephemeral,
+          }).catch(() => {});
         } else {
-          feedback = `❌ You have cancelled your registration for **${removedFromRole}**.`;
+          await interaction.followUp({
+            content: 'ℹ️ You are not currently registered for any role.',
+            flags: MessageFlags.Ephemeral,
+          }).catch(() => {});
         }
+        return;
+      }
+
+      if (wasWaitlisted) {
+        feedback = `❌ You have been removed from the **${removedFromRole}** waitlist.`;
       } else {
-        feedback = 'ℹ️ You are not currently registered for any role.';
+        feedback = `❌ You have cancelled your registration for **${removedFromRole}**.`;
       }
     } else {
       // 4. Handle Role Join (e.g. Main Ball or specialized roles)
-      const limit = this.limits[role] || 0;
+      const fallbackLimit = this.sessionType === 'siege' ? (DEFAULT_SIEGE_ROLE_LIMITS[role] ?? 1) : (DEFAULT_ROLE_LIMITS[role] ?? 1);
+      const limit = (this.limits[role] && this.limits[role] > 0) ? this.limits[role] : fallbackLimit;
+
       if (!this.data[role]) this.data[role] = [];
       if (!this.memberData[role]) this.memberData[role] = [];
       if (!this.waitlist[role]) this.waitlist[role] = [];
       if (!this.memberWaitlist[role]) this.memberWaitlist[role] = [];
+
+      // Clean role data inline to be 100% sure no phantom entries consume slots
+      const isBadName = (n: any) => {
+        if (!n) return true;
+        const cleaned = String(n).replace(/^[•\-\*\s]+/, '').trim();
+        return !cleaned || cleaned === '-' || cleaned === '—' || cleaned === '–';
+      };
+      this.data[role] = this.data[role].filter((n) => !isBadName(n));
+      this.memberData[role] = this.memberData[role].filter((m) => m && !isBadName(m.name));
 
       if (this.data[role].length < limit) {
         // Slot available -> Add to Active Roster
@@ -575,9 +744,6 @@ export class RSVPSession {
     // Cache message reference immediately
     this.client[this.messageKey('mainMsg')] = interaction.message;
     this.client[this.messageKey('mainMsgId')] = interaction.message.id;
-
-    // Save state non-blockingly
-    this.saveState();
 
     // Fast-path: Update Discord message directly via interaction callback (ZERO DELAY!)
     const { mainEmb } = this.buildEmbeds();
@@ -610,9 +776,15 @@ export class RSVPSession {
       }
     }
 
-    // If waitlist changed or fast-path didn't execute, trigger rapid background update (50ms)
-    if (!updatedViaInteraction || waitlistPromoted || this.client[this.messageKey('waitlistMsgId')]) {
-      this.triggerDiscordUpdate(50);
+    // Save state non-blockingly (notifies SSE for real-time dashboard sync)
+    this.saveState();
+
+    // If waitlist changed or fast-path didn't execute, trigger background update
+    // If fast-path succeeded, skip editing mainMsg again to prevent Discord API rate limit delays
+    if (!updatedViaInteraction) {
+      this.triggerDiscordUpdate(50, false);
+    } else if (waitlistPromoted || wasWaitlisted || this.client[this.messageKey('waitlistMsgId')]) {
+      this.triggerDiscordUpdate(50, true);
     }
   }
 
@@ -748,6 +920,13 @@ export class RSVPSession {
 
   removeMember(nameOrId: string) {
     let removed = false;
+    const clean = String(nameOrId || '').trim();
+    if (!clean || clean === '-' || clean === '—' || clean === '–' || clean.toLowerCase() === 'none') {
+      this.sanitizeData();
+      this.saveState();
+      this.triggerDiscordUpdate(50);
+      return true;
+    }
     for (const r of Object.keys(this.limits)) {
       const idx = this.findMemberIndex(this.data[r] || [], this.memberData[r] || [], nameOrId, nameOrId);
       if (idx !== -1) {

@@ -1,5 +1,6 @@
 import { PermissionsBitField, GuildMember } from 'discord.js';
-import { CONFIG, log } from './config.js';
+import moment from 'moment-timezone';
+import { CONFIG, log, JAKARTA_TZ } from './config.js';
 import {
   DAY_KEYS,
   DEFAULT_ROLE_LIMITS,
@@ -11,10 +12,11 @@ import {
   OFFICIAL_TOTAL_PAX,
 } from './constants.js';
 
-export function getLimits(targetDate: Date): Record<string, number> {
-  const weekday = targetDate.getDay();
+export function getLimits(targetDate: Date | moment.Moment | string): Record<string, number> {
+  const m = moment.tz(targetDate, JAKARTA_TZ);
+  const weekday = m.isValid() ? m.day() : 1;
   const dayPrefix = DAY_KEYS[weekday] || 'MON';
-  const tier = CONFIG[`${dayPrefix}_TIER`] || 'Tier 1';
+  const tier = CONFIG[`${dayPrefix}_TIER`] || 'Tier 2';
 
   const limits: Record<string, number> = {};
   for (const [role, configKey] of Object.entries(ROLE_CONFIG_KEYS)) {
@@ -23,15 +25,22 @@ export function getLimits(targetDate: Date): Record<string, number> {
       Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_ROLE_LIMITS[role];
   }
 
-  const mainBallKey = MAIN_BALL_CONFIG_KEYS[dayPrefix]?.[tier] || 'MAINBALL_MON_T1';
+  const mainBallKey = MAIN_BALL_CONFIG_KEYS[dayPrefix]?.[tier] || 'MAINBALL_MON_T2';
   const configuredMainBall = parseInt(CONFIG[mainBallKey], 10);
+  const fallbackMainBall =
+    DEFAULT_MAIN_BALL_LIMITS[dayPrefix]?.[tier] ||
+    (dayPrefix === 'SUN' || dayPrefix === 'FRI' ? 35 : 25);
+
   limits['Main Ball'] =
     Number.isFinite(configuredMainBall) && configuredMainBall > 0
       ? configuredMainBall
-      : DEFAULT_MAIN_BALL_LIMITS[dayPrefix]?.[tier] || 20;
+      : fallbackMainBall;
 
   const total = Object.values(limits).reduce((a, b) => a + b, 0);
-  log('RSVP', `Squad limits compiled for ${dayPrefix} (${tier}) -> Total: ${total} slots.`);
+  log(
+    'RSVP',
+    `Squad limits compiled for ${dayPrefix} (${tier}) -> Total: ${total} slots (Main Ball: ${limits['Main Ball']}).`
+  );
   return limits;
 }
 

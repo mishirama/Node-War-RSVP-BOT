@@ -10,6 +10,7 @@ import {
 } from 'discord.js';
 import moment from 'moment-timezone';
 import fs from 'fs';
+import path from 'path';
 import {
   CONFIG,
   DATA_FILE,
@@ -19,7 +20,12 @@ import {
   log,
   getDiscordToken,
 } from './config.js';
-import { CUSTOM_ID_TO_ROLE, SIEGE_ROLE_BUTTONS } from './constants.js';
+import {
+  CUSTOM_ID_TO_ROLE,
+  SIEGE_ROLE_BUTTONS,
+  DEFAULT_ROLE_LIMITS,
+  DEFAULT_SIEGE_ROLE_LIMITS,
+} from './constants.js';
 import { getLimits, getSiegeLimits, isAuthorized } from './utils.js';
 import { RSVPSession, MemberRecord } from './rsvpSession.js';
 
@@ -59,7 +65,33 @@ client.siegeWaitlistMsgId = null;
 client.siegeSession = null;
 
 let lastPostDate: string | null = null;
-const voteReminderSent = new Set<string>();
+
+const REMINDER_HISTORY_FILE = path.join(process.cwd(), 'reminder_history.json');
+
+function loadReminderHistory(): Set<string> {
+  try {
+    if (fs.existsSync(REMINDER_HISTORY_FILE)) {
+      const data = JSON.parse(fs.readFileSync(REMINDER_HISTORY_FILE, 'utf8'));
+      if (Array.isArray(data)) {
+        return new Set<string>(data);
+      }
+    }
+  } catch {}
+  return new Set<string>();
+}
+
+function saveReminderHistory(history: Set<string>) {
+  try {
+    const arr = Array.from(history).slice(-60);
+    fs.writeFileSync(REMINDER_HISTORY_FILE, JSON.stringify(arr, null, 2));
+  } catch (err) {
+    log('WARN', `Could not save reminder history: ${err}`);
+  }
+}
+
+const voteReminderSent = loadReminderHistory();
+let isSendingVoteReminder = false;
+let isSendingSiegeReminder = false;
 
 function messageKey(prefix: string, name: string) {
   return prefix ? `${prefix}${name[0].toUpperCase()}${name.slice(1)}` : name;
@@ -111,6 +143,7 @@ export function restoreState(dataFile = DATA_FILE, sessionKey = 'currentSession'
       if (state.member_data?.[role]) session.memberData[role] = state.member_data[role];
       if (state.member_waitlist?.[role]) session.memberWaitlist[role] = state.member_waitlist[role];
     }
+    session.sanitizeData();
     session.isClosed = state.is_closed || false;
     client[messageKey(messagePrefix, 'mainMsgId')] = state.main_msg_id || null;
     client[messageKey(messagePrefix, 'waitlistMsgId')] = state.waitlist_msg_id || null;
@@ -314,160 +347,239 @@ export async function closeSiege() {
 }
 
 export async function sendVoteReminder(customMessage?: string) {
-  if (!client.isReady || !client.isReady()) {
-    log('WARN', 'Discord client not ready. Reminder skipped.');
-    return { success: false, reason: 'Discord bot client is not connected' };
+  if (isSendingVoteReminder) {
+    log('WARN', 'Node War reminder already in progress, skipping concurrent call.');
+    return { success: false, reason: 'Reminder already being sent' };
   }
+  isSendingVoteReminder = true;
+  try {
+    if (!client.isReady || !client.isReady()) {
+      log('WARN', 'Discord client not ready. Reminder skipped.');
+      return { success: false, reason: 'Discord bot client is not connected' };
+    }
 
-  const session = client.currentSession;
-  if (!session) {
-    log('REMINDER', 'No Node War session loaded. Reminder skipped.');
-    return { success: false, reason: 'No Node War session is currently active' };
-  }
+    const session = client.currentSession;
+    if (!session) {
+      log('REMINDER', 'No Node War session loaded. Reminder skipped.');
+      return { success: false, reason: 'No Node War session is currently active' };
+    }
 
-  if (session.isClosed) {
-    log('REMINDER', 'Node War session is already closed. Reminder skipped.');
-    return { success: false, reason: 'Node War session is closed for today' };
-  }
+    if (session.isClosed) {
+      log('REMINDER', 'Node War session is already closed. Reminder skipped.');
+      return { success: false, reason: 'Node War session is closed for today' };
+    }
 
-  const channelId = CONFIG.CHANNEL_ID;
-  const channel = await client.channels.fetch(String(channelId || '0')).catch(() => null);
-  if (!channel || !channel.isTextBased()) {
-    log('ERROR', `Cannot send reminder: channel ${channelId} not found or not text-based.`);
-    return { success: false, reason: `Node War channel ${channelId} not found` };
-  }
+    const channelId = CONFIG.CHANNEL_ID;
+    const channel = await client.channels.fetch(String(channelId || '0')).catch(() => null);
+    if (!channel || !channel.isTextBased()) {
+      log('ERROR', `Cannot send reminder: channel ${channelId} not found or not text-based.`);
+      return { success: false, reason: `Node War channel ${channelId} not found` };
+    }
 
-  // Collect ONLY participants who already registered for Node War
-  const registeredUserIds = new Set<string>();
+    // Allowed roles for reminder ping: shotcaller, builder, elephant, flag, ft, hwacha, shai, mainball
+    const ALLOWED_REMINDER_ROLES = new Set([
+      'shotcaller',
+      'builder',
+      'elephant',
+      'flag',
+      'ft',
+      'hwacha',
+      'shai',
+      'mainball',
+      'main ball',
+    ]);
 
-  // Main roster
-  if (session.memberData) {
-    for (const members of Object.values(session.memberData)) {
-      if (Array.isArray(members)) {
-        for (const m of members) {
-          if (m?.id && /^\d{17,20}$/.test(m.id)) {
+    // Build comprehensive waitlist exclusion sets (by ID and by name)
+    const waitlistIds = new Set<string>();
+    const waitlistNames = new Set<string>();
+
+    if (session.memberWaitlist) {
+      for (const members of Object.values(session.memberWaitlist)) {
+        if (Array.isArray(members)) {
+          for (const m of members) {
+            if (m?.id) waitlistIds.add(m.id);
+            if (m?.name) waitlistNames.add(m.name.toLowerCase().trim());
+          }
+        }
+      }
+    }
+
+    if (session.waitlist) {
+      for (const names of Object.values(session.waitlist)) {
+        if (Array.isArray(names)) {
+          for (const n of names) {
+            if (typeof n === 'string' && n.trim()) {
+              waitlistNames.add(n.toLowerCase().trim());
+            }
+          }
+        }
+      }
+    }
+
+    // Also treat any overflow members beyond role limits in session.memberData as waitlist
+    if (session.memberData) {
+      for (const [roleName, members] of Object.entries(session.memberData)) {
+        const limit = session.limits[roleName] ?? DEFAULT_ROLE_LIMITS[roleName] ?? 0;
+        if (Array.isArray(members) && members.length > limit) {
+          const overflow = members.slice(limit);
+          for (const m of overflow) {
+            if (m?.id) waitlistIds.add(m.id);
+            if (m?.name) waitlistNames.add(m.name.toLowerCase().trim());
+          }
+        }
+      }
+    }
+
+    // Collect ONLY main roster participants for the specified roles (STRICTLY within role limit)
+    const registeredUserIds = new Set<string>();
+
+    if (session.memberData) {
+      for (const [roleName, members] of Object.entries(session.memberData)) {
+        const cleanRole = roleName.toLowerCase().trim();
+        const strippedRole = cleanRole.replace(/[\s_-]+/g, '');
+        if (
+          (ALLOWED_REMINDER_ROLES.has(cleanRole) || ALLOWED_REMINDER_ROLES.has(strippedRole)) &&
+          Array.isArray(members)
+        ) {
+          const limit = session.limits[roleName] ?? DEFAULT_ROLE_LIMITS[roleName] ?? 0;
+          // ONLY take up to the role's maximum capacity
+          const rosterMembers = members.slice(0, limit);
+
+          for (const m of rosterMembers) {
+            if (!m?.id || !/^\d{17,20}$/.test(m.id)) continue;
+            // Exclude anyone present on any waitlist (by ID or name)
+            if (waitlistIds.has(m.id)) continue;
+            if (m.name && waitlistNames.has(m.name.toLowerCase().trim())) continue;
+
             registeredUserIds.add(m.id);
           }
         }
       }
     }
-  }
 
-  // Waitlist roster
-  if (session.memberWaitlist) {
-    for (const members of Object.values(session.memberWaitlist)) {
-      if (Array.isArray(members)) {
-        for (const m of members) {
-          if (m?.id && /^\d{17,20}$/.test(m.id)) {
-            registeredUserIds.add(m.id);
-          }
-        }
-      }
+    // Final safety pass: strictly remove any waitlist IDs
+    for (const wId of waitlistIds) {
+      registeredUserIds.delete(wId);
     }
-  }
 
-  // Determine day and tier
-  const dayKey =
-    ({ 0: 'SUN', 1: 'MON', 2: 'TUE', 3: 'WED', 4: 'THU', 5: 'FRI', 6: 'SAT' } as Record<number, string>)[
-      session.targetDate.getDay()
-    ] || 'SUN';
+    // Determine day and tier
+    const dayKey =
+      ({ 0: 'SUN', 1: 'MON', 2: 'TUE', 3: 'WED', 4: 'THU', 5: 'FRI', 6: 'SAT' } as Record<number, string>)[
+        session.targetDate.getDay()
+      ] || 'SUN';
 
-  const dayNames: Record<string, string> = {
-    SUN: 'Sunday',
-    MON: 'Monday',
-    TUE: 'Tuesday',
-    WED: 'Wednesday',
-    THU: 'Thursday',
-    FRI: 'Friday',
-    SAT: 'Saturday',
-  };
-
-  const tier = CONFIG[`${dayKey}_TIER`] === 'Tier 1' ? 'Tier 1' : 'Tier 2';
-  const defaultTarget = tier === 'Tier 2' ? 'Calpheon or Ulukita' : 'Balenos or Serendia';
-  const configuredTarget = CONFIG[`${dayKey}_VOTE_TARGET`]?.trim();
-  const target = configuredTarget || defaultTarget;
-
-  // Custom reminder message template
-  const rawTemplate =
-    customMessage?.trim() ||
-    CONFIG.NW_REMINDER_MESSAGE?.trim() ||
-    '⚠️ **Node War In-Game Vote Reminder**\nPlease **YES UP** on **{target}** for **{tier}**!\nMake sure to submit your vote in-game before the deadline.';
-
-  const formattedMessage = rawTemplate
-    .replace(/\{target\}/gi, target)
-    .replace(/\{tier\}/gi, tier)
-    .replace(/\{date\}/gi, moment(session.targetDate).format('YYYY-MM-DD'))
-    .replace(/\{day\}/gi, dayNames[dayKey] || dayKey)
-    .replace(/\{count\}/gi, String(registeredUserIds.size));
-
-  const userIdsList = Array.from(registeredUserIds);
-
-  if (userIdsList.length === 0) {
-    // If nobody has registered yet, post reminder notice without pinging @everyone
-    await channel.send({
-      content: `🔔 **Node War In-Game Vote Reminder**\n${formattedMessage}\n\n*(Notice: No Node War participants currently registered on the roster).*`,
-      allowedMentions: { parse: [] }, // STRICT: NO @everyone, NO roles
-    });
-    log('REMINDER', `Node War reminder sent (0 registered participants). Target: ${target} (${tier})`);
-    return {
-      success: true,
-      count: 0,
-      target,
-      tier,
-      message: `Reminder sent to Node War channel (0 participants currently registered)`,
+    const dayNames: Record<string, string> = {
+      SUN: 'Sunday',
+      MON: 'Monday',
+      TUE: 'Tuesday',
+      WED: 'Wednesday',
+      THU: 'Thursday',
+      FRI: 'Friday',
+      SAT: 'Saturday',
     };
-  }
 
-  // Ping ONLY registered participants (chunked to ensure message stays well under 2000 characters)
-  const mentions = userIdsList.map((id) => `<@${id}>`);
-  const chunkSize = 40;
+    const tier = CONFIG[`${dayKey}_TIER`] === 'Tier 1' ? 'Tier 1' : 'Tier 2';
+    const defaultTarget = tier === 'Tier 2' ? 'Calpheon or Ulukita' : 'Balenos or Serendia';
+    const configuredTarget = CONFIG[`${dayKey}_VOTE_TARGET`]?.trim();
+    const target = configuredTarget || defaultTarget;
 
-  for (let i = 0; i < mentions.length; i += chunkSize) {
-    const chunkMentions = mentions.slice(i, i + chunkSize);
-    const chunkIds = userIdsList.slice(i, i + chunkSize);
+    // Custom reminder message template
+    const rawTemplate =
+      customMessage?.trim() ||
+      CONFIG.NW_REMINDER_MESSAGE?.trim() ||
+      '⚠️ **Node War In-Game Vote Reminder**\nPlease **YES UP** on **{target}** for **{tier}**!\nMake sure to submit your vote in-game before the deadline.';
 
-    let content = '';
-    if (i === 0) {
-      content = `🔔 **Node War In-Game Vote Reminder**\n${formattedMessage}\n\n**Node War Participants (${userIdsList.length}):**\n${chunkMentions.join(' ')}`;
-    } else {
-      content = `**Node War Participants (Continued):**\n${chunkMentions.join(' ')}`;
+    const formattedMessage = rawTemplate
+      .replace(/\{target\}/gi, target)
+      .replace(/\{tier\}/gi, tier)
+      .replace(/\{date\}/gi, moment(session.targetDate).format('YYYY-MM-DD'))
+      .replace(/\{day\}/gi, dayNames[dayKey] || dayKey)
+      .replace(/\{count\}/gi, String(registeredUserIds.size));
+
+    const userIdsList = Array.from(registeredUserIds);
+
+    if (userIdsList.length === 0) {
+      // If nobody has registered yet, post reminder notice without pinging @everyone
+      await channel.send({
+        content: `🔔 **Node War In-Game Vote Reminder**\n${formattedMessage}\n\n*(Notice: No Node War participants currently registered on the roster).*`,
+        allowedMentions: { parse: [] }, // STRICT: NO @everyone, NO roles
+      });
+      log('REMINDER', `Node War reminder sent (0 registered participants). Target: ${target} (${tier})`);
+      return {
+        success: true,
+        count: 0,
+        target,
+        tier,
+        message: `Reminder sent to Node War channel (0 participants currently registered)`,
+      };
     }
+
+    // STRICT: Send EXACTLY ONE message to Discord (never split or tripled)
+    const baseHeader = `🔔 **Node War In-Game Vote Reminder**\n${formattedMessage}\n\n`;
+    const participantsHeader = `**Node War Participants (${userIdsList.length}):**\n`;
+
+    const pingedUserIds: string[] = [];
+    const mentionStrings: string[] = [];
+    const maxContentLength = 1950;
+    let currentLength = baseHeader.length + participantsHeader.length;
+
+    for (const id of userIdsList) {
+      const mention = `<@${id}>`;
+      const addedLen = (mentionStrings.length > 0 ? 1 : 0) + mention.length;
+      if (currentLength + addedLen <= maxContentLength) {
+        mentionStrings.push(mention);
+        pingedUserIds.push(id);
+        currentLength += addedLen;
+      } else {
+        break;
+      }
+    }
+
+    const content = `${baseHeader}${participantsHeader}${mentionStrings.join(' ')}`;
 
     await channel.send({
       content,
       allowedMentions: {
-        users: chunkIds, // ONLY ping these registered users
-        roles: [],       // NEVER ping roles
-        parse: [],       // NEVER parse @everyone or @here
+        users: pingedUserIds,
+        roles: [], // STRICT: NEVER PING ALLIANCE OR ANY ROLES
+        parse: [], // NEVER parse @everyone or @here
       },
     });
+
+    log(
+      'REMINDER',
+      `Node War vote reminder pinged ${userIdsList.length} registered participant(s) in a single message for ${target} (${tier}).`
+    );
+
+    return {
+      success: true,
+      count: userIdsList.length,
+      target,
+      tier,
+      message: `Reminder sent! Pinged ${userIdsList.length} registered Node War participant(s) in 1 message.`,
+    };
+  } finally {
+    isSendingVoteReminder = false;
   }
-
-  log(
-    'REMINDER',
-    `Node War vote reminder pinged ${userIdsList.length} registered participant(s) for ${target} (${tier}).`
-  );
-
-  return {
-    success: true,
-    count: userIdsList.length,
-    target,
-    tier,
-    message: `Reminder sent! Pinged ${userIdsList.length} registered Node War participant(s).`,
-  };
 }
 
 export async function sendSiegeReminder(customMessage?: string) {
-  if (!client.isReady || !client.isReady()) {
-    log('WARN', 'Discord client not ready. Siege reminder skipped.');
-    return { success: false, reason: 'Discord bot client is not connected' };
+  if (isSendingSiegeReminder) {
+    log('WARN', 'Siege War reminder already in progress, skipping concurrent call.');
+    return { success: false, reason: 'Siege reminder already being sent' };
   }
+  isSendingSiegeReminder = true;
+  try {
+    if (!client.isReady || !client.isReady()) {
+      log('WARN', 'Discord client not ready. Siege reminder skipped.');
+      return { success: false, reason: 'Discord bot client is not connected' };
+    }
 
-  const session = client.siegeSession;
-  if (!session) {
-    log('REMINDER', 'No Siege War session loaded. Reminder skipped.');
-    return { success: false, reason: 'No Siege War session is currently active' };
-  }
+    const session = client.siegeSession;
+    if (!session) {
+      log('REMINDER', 'No Siege War session loaded. Reminder skipped.');
+      return { success: false, reason: 'No Siege War session is currently active' };
+    }
 
   const channelId = CONFIG.SIEGE_CHANNEL_ID || CONFIG.CHANNEL_ID;
   const channel = await client.channels.fetch(String(channelId || '0')).catch(() => null);
@@ -476,31 +588,70 @@ export async function sendSiegeReminder(customMessage?: string) {
     return { success: false, reason: `Siege War channel ${channelId} not found` };
   }
 
-  // Collect ONLY participants who registered for Siege War
-  const registeredUserIds = new Set<string>();
+  // Build comprehensive waitlist exclusion sets (by ID and by name)
+  const waitlistIds = new Set<string>();
+  const waitlistNames = new Set<string>();
 
-  if (session.memberData) {
-    for (const members of Object.values(session.memberData)) {
+  if (session.memberWaitlist) {
+    for (const members of Object.values(session.memberWaitlist)) {
       if (Array.isArray(members)) {
         for (const m of members) {
-          if (m?.id && /^\d{17,20}$/.test(m.id)) {
-            registeredUserIds.add(m.id);
+          if (m?.id) waitlistIds.add(m.id);
+          if (m?.name) waitlistNames.add(m.name.toLowerCase().trim());
+        }
+      }
+    }
+  }
+
+  if (session.waitlist) {
+    for (const names of Object.values(session.waitlist)) {
+      if (Array.isArray(names)) {
+        for (const n of names) {
+          if (typeof n === 'string' && n.trim()) {
+            waitlistNames.add(n.toLowerCase().trim());
           }
         }
       }
     }
   }
 
-  if (session.memberWaitlist) {
-    for (const members of Object.values(session.memberWaitlist)) {
-      if (Array.isArray(members)) {
-        for (const m of members) {
-          if (m?.id && /^\d{17,20}$/.test(m.id)) {
-            registeredUserIds.add(m.id);
-          }
+  // Treat any overflow members beyond role limits in session.memberData as waitlist
+  if (session.memberData) {
+    for (const [roleName, members] of Object.entries(session.memberData)) {
+      const limit = session.limits[roleName] ?? DEFAULT_SIEGE_ROLE_LIMITS[roleName] ?? 0;
+      if (Array.isArray(members) && members.length > limit) {
+        const overflow = members.slice(limit);
+        for (const m of overflow) {
+          if (m?.id) waitlistIds.add(m.id);
+          if (m?.name) waitlistNames.add(m.name.toLowerCase().trim());
         }
       }
     }
+  }
+
+  // Collect ONLY main roster participants for Siege War (STRICTLY within role limit)
+  const registeredUserIds = new Set<string>();
+
+  if (session.memberData) {
+    for (const [roleName, members] of Object.entries(session.memberData)) {
+      if (Array.isArray(members)) {
+        const limit = session.limits[roleName] ?? DEFAULT_SIEGE_ROLE_LIMITS[roleName] ?? 0;
+        const rosterMembers = members.slice(0, limit);
+
+        for (const m of rosterMembers) {
+          if (!m?.id || !/^\d{17,20}$/.test(m.id)) continue;
+          if (waitlistIds.has(m.id)) continue;
+          if (m.name && waitlistNames.has(m.name.toLowerCase().trim())) continue;
+
+          registeredUserIds.add(m.id);
+        }
+      }
+    }
+  }
+
+  // Final safety pass: strictly remove any waitlist IDs
+  for (const wId of waitlistIds) {
+    registeredUserIds.delete(wId);
   }
 
   const defaultMsg =
@@ -511,7 +662,7 @@ export async function sendSiegeReminder(customMessage?: string) {
 
   if (userIdsList.length === 0) {
     await channel.send({
-      content: `🔔 **Siege War In-Game Vote Reminder**\n${formattedMessage}\n\n*(Notice: No participants currently registered on the Siege War roster).*`,
+      content: `🔔 **Siege War In-Game Vote Reminder**\n${formattedMessage}\n\n*(Notice: No participants currently registered on the Siege War main roster).*`,
       allowedMentions: { parse: [] },
     });
     log('REMINDER', `Siege War reminder sent (0 registered participants).`);
@@ -522,37 +673,51 @@ export async function sendSiegeReminder(customMessage?: string) {
     };
   }
 
-  const mentions = userIdsList.map((id) => `<@${id}>`);
-  const chunkSize = 40;
+  // STRICT: Send EXACTLY ONE message to Discord (never split or tripled)
+  const baseHeader = `🔔 **Siege War In-Game Vote Reminder**\n${formattedMessage}\n\n`;
+  const participantsHeader = `**Siege War Registered Participants (${userIdsList.length}):**\n`;
 
-  for (let i = 0; i < mentions.length; i += chunkSize) {
-    const chunkMentions = mentions.slice(i, i + chunkSize);
-    const chunkIds = userIdsList.slice(i, i + chunkSize);
+  const pingedUserIds: string[] = [];
+  const mentionStrings: string[] = [];
+  const maxContentLength = 1950;
+  let currentLength = baseHeader.length + participantsHeader.length;
 
-    let content = '';
-    if (i === 0) {
-      content = `🔔 **Siege War In-Game Vote Reminder**\n${formattedMessage}\n\n**Siege War Registered Participants (${userIdsList.length}):**\n${chunkMentions.join(' ')}`;
+  for (const id of userIdsList) {
+    const mention = `<@${id}>`;
+    const addedLen = (mentionStrings.length > 0 ? 1 : 0) + mention.length;
+    if (currentLength + addedLen <= maxContentLength) {
+      mentionStrings.push(mention);
+      pingedUserIds.push(id);
+      currentLength += addedLen;
     } else {
-      content = `**Siege War Participants (Continued):**\n${chunkMentions.join(' ')}`;
+      break;
     }
-
-    await channel.send({
-      content,
-      allowedMentions: {
-        users: chunkIds,
-        roles: [],
-        parse: [],
-      },
-    });
   }
 
-  log('REMINDER', `Siege War vote reminder pinged ${userIdsList.length} registered participant(s).`);
+  const content = `${baseHeader}${participantsHeader}${mentionStrings.join(' ')}`;
 
-  return {
-    success: true,
-    count: userIdsList.length,
-    message: `Siege reminder sent! Pinged ${userIdsList.length} registered Siege War participant(s).`,
-  };
+  await channel.send({
+    content,
+    allowedMentions: {
+      users: pingedUserIds,
+      roles: [], // STRICT: NEVER PING ALLIANCE OR ANY ROLES
+      parse: [], // NEVER parse @everyone or @here
+    },
+  });
+
+    log(
+      'REMINDER',
+      `Siege War vote reminder pinged ${userIdsList.length} registered participant(s) in a single message.`
+    );
+
+    return {
+      success: true,
+      count: userIdsList.length,
+      message: `Siege reminder sent! Pinged ${userIdsList.length} registered Siege War participant(s) in 1 message.`,
+    };
+  } finally {
+    isSendingSiegeReminder = false;
+  }
 }
 
 export async function giveAllMembersAllianceRole() {
@@ -641,16 +806,27 @@ export function startScheduler() {
       await closeRSVP();
     }
 
-    // Automatically send reminder at 17:00 and 19:00 GMT+7 (Asia/Jakarta)
-    if (now.hour() === 17 || now.hour() === 19) {
-      const reminderKey = `${now.format('YYYY-MM-DD')}-${now.hour()}`;
+    // Automatically send reminder at exactly 17:00 and 19:00 GMT+7 (Asia/Jakarta)
+    const isReminderHour = now.hour() === 17 || now.hour() === 19;
+    const isReminderMinute = now.minute() === 0;
+
+    if (isReminderHour && isReminderMinute) {
+      const reminderKey = `${today}-${now.hour()}`;
       if (!voteReminderSent.has(reminderKey)) {
         voteReminderSent.add(reminderKey);
-        log('REMINDER', `Triggering automated ${now.hour()}:00 GMT+7 Node War vote reminder...`);
-        await sendVoteReminder();
+        saveReminderHistory(voteReminderSent);
+
+        const isSaturday = now.day() === 6;
+        if (isSaturday && client.siegeSession && !client.siegeSession.isClosed) {
+          log('REMINDER', `Triggering automated ${now.hour()}:00 GMT+7 Siege War vote reminder (single ping)...`);
+          await sendSiegeReminder();
+        } else if (client.currentSession && !client.currentSession.isClosed) {
+          log('REMINDER', `Triggering automated ${now.hour()}:00 GMT+7 Node War vote reminder (single ping)...`);
+          await sendVoteReminder();
+        }
       }
     }
-  }, 60 * 1000);
+  }, 30 * 1000);
 }
 
 // Bot event registrations
@@ -683,6 +859,12 @@ client.once(Events.ClientReady, async () => {
           client.siegeWaitlistMsg = await sCh.messages.fetch(client.siegeWaitlistMsgId).catch(() => null);
         }
       }
+    }
+
+    // Refresh limits with timezone-aware calculations and update Discord embeds
+    if (client.currentSession && !client.currentSession.isClosed) {
+      client.currentSession.limits = getLimits(client.currentSession.targetDate);
+      client.currentSession.triggerDiscordUpdate(100, true);
     }
   } catch (e) {
     log('WARN', `Could not pre-fetch messages on ready: ${e}`);
@@ -803,10 +985,26 @@ function parseEmbedRoleMembers(embed: any): Record<string, string[]> {
     else if (name.includes('Witch') || name.includes('Wizard')) role = 'Witch/Wizard';
 
     if (!role) continue;
-    const lines = String(field.value || '')
+    const rawVal = String(field.value || '').trim();
+    const stripped = rawVal.replace(/^[•\-\*\s]+/, '').trim();
+    if (!stripped || stripped === '-' || stripped === '—' || stripped === '–' || stripped.toLowerCase() === 'none') {
+      continue;
+    }
+    const lines = rawVal
       .split('\n')
-      .map((l: string) => l.replace(/^•\s*/, '').trim())
-      .filter((l: string) => l.length > 0 && !l.includes('No players') && !l.includes('None') && !l.includes('No backups'));
+      .map((l: string) => l.replace(/^[•\-\*\s]+/, '').trim())
+      .filter((l: string) => {
+        const clean = l.replace(/^[•\-\*\s]+/, '').trim();
+        return (
+          clean.length > 0 &&
+          clean !== '-' &&
+          clean !== '—' &&
+          clean !== '–' &&
+          !clean.toLowerCase().includes('no players') &&
+          !clean.toLowerCase().includes('none') &&
+          !clean.toLowerCase().includes('no backups')
+        );
+      });
 
     if (!result[role]) result[role] = [];
     result[role].push(...lines);

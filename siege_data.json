@@ -1,5 +1,5 @@
 {
-    "target_date": "2026-09-05",
+    "target_date": "2026-09-06",
     "is_closed": false,
     "data": {
         "Builder": [
@@ -12,9 +12,8 @@
             "[RB] Killua"
         ],
         "FT": [
-            "[RB] Urva",
             "[Ego] JAKUT",
-            "[RB] Manipulator"
+            "[Ego] Abzy"
         ],
         "Hwacha": [
             "[RB] Touwa"
@@ -70,7 +69,6 @@
             "[TC] Badoom",
             "[RB] Andriana",
             "[RB] SkyJaw",
-            "[TC] Wazouskie",
             "[Ego] Pewpww",
             "[TC] Lumini",
             "[RB] Rotheimer",
@@ -93,12 +91,15 @@
             "[RB] WesTrump",
             "[RB] Yeliza",
             "[RB] Armoun",
-            "[Ego] Abzy",
             "[RB] Umaru",
             "[Ego] Alima",
             "[TC] Alexis",
             "[RB] Paansi",
-            "[RB] Dropcult"
+            "[RB] Dropcult",
+            "[RB] Urva",
+            "[RB] Manipulator",
+            "[Ego] Banshe",
+            "[RB] Alkaraz"
         ]
     },
     "waitlist": {
@@ -133,16 +134,12 @@
         ],
         "FT": [
             {
-                "id": "670525910612574220",
-                "name": "[RB] Urva"
-            },
-            {
                 "id": "1063995255512371270",
                 "name": "[Ego] JAKUT"
             },
             {
-                "id": "229101804795723777",
-                "name": "[RB] Manipulator"
+                "id": "1543958809318395944",
+                "name": "[Ego] Abzy"
             }
         ],
         "Hwacha": [
@@ -335,10 +332,6 @@
                 "name": "[RB] SkyJaw"
             },
             {
-                "id": "372178152669184000",
-                "name": "[TC] Wazouskie"
-            },
-            {
                 "id": "847795523904864306",
                 "name": "[Ego] Pewpww"
             },
@@ -427,10 +420,6 @@
                 "name": "[RB] Armoun"
             },
             {
-                "id": "1543958809318395944",
-                "name": "[Ego] Abzy"
-            },
-            {
                 "id": "509016873199730718",
                 "name": "[RB] Umaru"
             },
@@ -449,6 +438,22 @@
             {
                 "id": "693505900308070432",
                 "name": "[RB] Dropcult"
+            },
+            {
+                "id": "670525910612574220",
+                "name": "[RB] Urva"
+            },
+            {
+                "id": "229101804795723777",
+                "name": "[RB] Manipulator"
+            },
+            {
+                "id": "319656088012193792",
+                "name": "[Ego] Banshe"
+            },
+            {
+                "id": "261433877506162698",
+                "name": "[RB] Alkaraz"
             }
         ]
     },

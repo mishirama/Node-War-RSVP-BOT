@@ -47,13 +47,13 @@ export const ROLE_BUTTONS = [
 ];
 
 export const SIEGE_ROLE_BUTTONS = [
+  { role: "Shotcaller", customId: "rsvp_shotcaller", emoji: ROLE_EMOJIS["Shotcaller"] || "📢" },
+  { role: "Flag", customId: "rsvp_flag", emoji: ROLE_EMOJIS["Flag"] || "1543984858894704710" },
   { role: "Builder", customId: "rsvp_builder", emoji: ROLE_EMOJIS["Builder"] || "🔨" },
   { role: "Elephant", customId: "rsvp_elephant", emoji: ROLE_EMOJIS["Elephant"] || "1543984913047486545" },
-  { role: "Flag", customId: "rsvp_flag", emoji: ROLE_EMOJIS["Flag"] || "1543984858894704710" },
   { role: "FT", customId: "rsvp_ft", emoji: ROLE_EMOJIS["FT"] || "1543984885432062092" },
   { role: "Hwacha", customId: "rsvp_hwacha", emoji: ROLE_EMOJIS["Hwacha"] || "1543984939861803108" },
   { role: "Shai", customId: "rsvp_shai", emoji: ROLE_EMOJIS["Shai"] || "1544203289393111080" },
-  { role: "Shotcaller", customId: "rsvp_shotcaller", emoji: ROLE_EMOJIS["Shotcaller"] || "📢" },
   { role: "Witch/Wizard", customId: "rsvp_witch_wizard", emoji: ROLE_EMOJIS["Witch/Wizard"] || "1544202932256252167" },
   { role: "Main Ball", customId: "rsvp_main", emoji: ROLE_EMOJIS["Main Ball"] || "⚔️" },
 ];
@@ -97,6 +97,39 @@ export const SIEGE_ROLE_CONFIG_KEYS: Record<string, string> = {
   "Witch/Wizard": "SIEGE_LIMIT_WITCH_WIZARD",
 };
 
+export const CANONICAL_NODE_ROLES: string[] = [
+  "Builder",
+  "Elephant",
+  "Flag",
+  "FT",
+  "Hwacha",
+  "Shai",
+  "Shotcaller",
+  "Main Ball",
+];
+
+export const CANONICAL_SIEGE_ROLES: string[] = [
+  "Builder",
+  "Elephant",
+  "Flag",
+  "FT",
+  "Hwacha",
+  "Shai",
+  "Shotcaller",
+  "Witch/Wizard",
+  "Main Ball",
+];
+
+export function getCanonicalRoles(sessionType?: string, existingRoles?: string[]): string[] {
+  const base = sessionType === 'siege' ? CANONICAL_SIEGE_ROLES : CANONICAL_NODE_ROLES;
+  if (!existingRoles || existingRoles.length === 0) return [...base];
+
+  const known = new Set(base);
+  const extra = existingRoles.filter((r) => !known.has(r)).sort();
+  const withoutMain = base.filter((r) => r !== 'Main Ball');
+  return [...withoutMain, ...extra, 'Main Ball'];
+}
+
 export const DEFAULT_SIEGE_ROLE_LIMITS: Record<string, number> = {
   Builder: 1,
   Elephant: 1,
@@ -109,12 +142,12 @@ export const DEFAULT_SIEGE_ROLE_LIMITS: Record<string, number> = {
 };
 
 export const DEFAULT_MAIN_BALL_LIMITS: Record<string, Record<string, number>> = {
-  SUN: { "Tier 1": 20, "Tier 2": 35 },
-  MON: { "Tier 1": 15, "Tier 2": 25 },
-  TUE: { "Tier 1": 20, "Tier 2": 25 },
-  WED: { "Tier 1": 15, "Tier 2": 25 },
-  THU: { "Tier 1": 20, "Tier 2": 25 },
-  FRI: { "Tier 1": 15, "Tier 2": 35 },
+  SUN: { "Tier 1": 35, "Tier 2": 35 },
+  MON: { "Tier 1": 25, "Tier 2": 25 },
+  TUE: { "Tier 1": 25, "Tier 2": 25 },
+  WED: { "Tier 1": 25, "Tier 2": 25 },
+  THU: { "Tier 1": 25, "Tier 2": 25 },
+  FRI: { "Tier 1": 35, "Tier 2": 35 },
 };
 
 export const MAIN_BALL_CONFIG_KEYS: Record<string, Record<string, string>> = {

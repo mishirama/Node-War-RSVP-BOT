@@ -3,6 +3,7 @@ import http from 'http';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
+import moment from 'moment-timezone';
 import {
   CONFIG,
   CONFIG_FILE,
@@ -186,14 +187,39 @@ async function startServer() {
     let nodeData = null;
     let siegeData = null;
 
-    if (fs.existsSync(DATA_FILE)) {
+    if (client.currentSession) {
+      nodeData = {
+        target_date: moment(client.currentSession.targetDate).format('YYYY-MM-DD'),
+        is_closed: client.currentSession.isClosed,
+        data: client.currentSession.data,
+        waitlist: client.currentSession.waitlist,
+        member_data: client.currentSession.memberData,
+        member_waitlist: client.currentSession.memberWaitlist,
+        session_type: client.currentSession.sessionType,
+        main_msg_id: client[client.currentSession.messageKey('mainMsgId')] || null,
+        waitlist_msg_id: client[client.currentSession.messageKey('waitlistMsgId')] || null,
+      };
+    } else if (fs.existsSync(DATA_FILE)) {
       try {
         nodeData = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
       } catch (e) {
         log('ERROR', `Failed reading ${DATA_FILE}`);
       }
     }
-    if (fs.existsSync(SIEGE_DATA_FILE)) {
+
+    if (client.siegeSession) {
+      siegeData = {
+        target_date: moment(client.siegeSession.targetDate).format('YYYY-MM-DD'),
+        is_closed: client.siegeSession.isClosed,
+        data: client.siegeSession.data,
+        waitlist: client.siegeSession.waitlist,
+        member_data: client.siegeSession.memberData,
+        member_waitlist: client.siegeSession.memberWaitlist,
+        session_type: client.siegeSession.sessionType,
+        main_msg_id: client[client.siegeSession.messageKey('mainMsgId')] || null,
+        waitlist_msg_id: client[client.siegeSession.messageKey('waitlistMsgId')] || null,
+      };
+    } else if (fs.existsSync(SIEGE_DATA_FILE)) {
       try {
         siegeData = JSON.parse(fs.readFileSync(SIEGE_DATA_FILE, 'utf8'));
       } catch (e) {

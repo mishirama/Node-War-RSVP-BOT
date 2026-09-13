@@ -68,14 +68,35 @@ export const RosterView: React.FC<RosterViewProps> = ({
   const [syncingAllianceRole, setSyncingAllianceRole] = useState(false);
   const [roleFeedback, setRoleFeedback] = useState<string | null>(null);
 
-  const roles = Object.keys(limits);
+  const canonicalOrder =
+    mode === 'siege'
+      ? ['Builder', 'Elephant', 'Flag', 'FT', 'Hwacha', 'Shai', 'Shotcaller', 'Witch/Wizard', 'Main Ball']
+      : ['Builder', 'Elephant', 'Flag', 'FT', 'Hwacha', 'Shai', 'Shotcaller', 'Main Ball'];
+
   const data = sessionData?.data || {};
   const waitlist = sessionData?.waitlist || {};
 
+  const allRoleKeys = Array.from(new Set([...Object.keys(limits), ...Object.keys(data)]));
+  const roles = [
+    ...canonicalOrder.filter((r) => allRoleKeys.includes(r)),
+    ...allRoleKeys.filter((r) => !canonicalOrder.includes(r)).sort(),
+  ];
+
+  const isInvalidName = (u: any) => {
+    const clean = String(u || '').trim();
+    return !clean || clean === '-' || clean === '—' || clean === '–' || clean.toLowerCase() === 'none';
+  };
+
   // Calculate totals
-  const totalRegistered = Object.values(data).reduce<number>((sum, arr) => sum + ((arr as string[])?.length || 0), 0);
+  const totalRegistered = Object.values(data).reduce<number>(
+    (sum, arr) => sum + ((arr as string[])?.filter((u) => !isInvalidName(u)).length || 0),
+    0
+  );
   const totalSlots = Object.values(limits).reduce<number>((sum, num) => sum + (Number(num) || 0), 0);
-  const totalWaitlist = Object.values(waitlist).reduce<number>((sum, arr) => sum + ((arr as string[])?.length || 0), 0);
+  const totalWaitlist = Object.values(waitlist).reduce<number>(
+    (sum, arr) => sum + ((arr as string[])?.filter((u) => !isInvalidName(u)).length || 0),
+    0
+  );
 
   const handleCopyDiscordRoster = () => {
     if (!sessionData) return;
@@ -367,8 +388,12 @@ export const RosterView: React.FC<RosterViewProps> = ({
       {/* Roster Grid with Drag & Drop */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {roles.map((role) => {
-          const users = data[role] || [];
-          const waitlistUsers = waitlist[role] || [];
+          const isInvalid = (u: string) => {
+            const clean = String(u || '').trim();
+            return !clean || clean === '-' || clean === '—' || clean === '–';
+          };
+          const users = (data[role] || []).filter((u) => !isInvalid(u));
+          const waitlistUsers = (waitlist[role] || []).filter((u) => !isInvalid(u));
           const limit = limits[role] || 0;
           const isFull = users.length >= limit;
           const isDropTarget = dragOverRole === role && draggedMember && draggedMember.fromRole !== role;
