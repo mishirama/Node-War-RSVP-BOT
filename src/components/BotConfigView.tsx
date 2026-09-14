@@ -395,22 +395,10 @@ export const BotConfigView: React.FC<BotConfigViewProps> = ({
                 17:00 WIB
               </span>
               <div>
-                <strong className="text-slate-200 block">First In-Game Vote Reminder</strong>
+                <strong className="text-slate-200 block">In-Game Vote Reminder</strong>
                 <span className="text-slate-400">
                   Mentions active RSVP sign-ups in Discord to vote &quot;YES&quot; on the designated
                   territories (e.g., Calpheon/Ulukita for T2).
-                </span>
-              </div>
-            </div>
-
-            <div className="p-2.5 rounded-lg bg-[#17191d] border border-[#2d323b] flex items-start gap-3">
-              <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold shrink-0">
-                19:00 WIB
-              </span>
-              <div>
-                <strong className="text-slate-200 block">Final In-Game Vote Reminder</strong>
-                <span className="text-slate-400">
-                  Final hour nudge before voting lock to ensure maximum war participation.
                 </span>
               </div>
             </div>

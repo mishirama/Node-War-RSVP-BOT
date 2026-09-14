@@ -297,7 +297,7 @@ export const NodeWarSettings: React.FC<NodeWarSettingsProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#17191d] border border-[#2d323b] text-xs font-mono text-emerald-400">
               <Clock className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Auto-Pings: 17:00 & 19:00 GMT+7</span>
+              <span>Auto-Ping: 17:00 GMT+7</span>
             </div>
           </div>
         </div>
@@ -319,10 +319,10 @@ export const NodeWarSettings: React.FC<NodeWarSettingsProps> = ({
           <div className="p-3 rounded-xl bg-[#17191d] border border-[#2d323b] flex items-start gap-2.5">
             <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <div className="space-y-0.5">
-              <strong className="text-slate-200 font-semibold block">Two Automated Schedule Windows</strong>
+              <strong className="text-slate-200 font-semibold block">Automated 17:00 Schedule Window</strong>
               <p className="text-slate-400 text-[11px] leading-relaxed">
-                Automatically triggered every evening at <b>17:00 GMT+7 (5:00 PM WIB)</b> and{' '}
-                <b>19:00 GMT+7 (7:00 PM WIB)</b> before RSVP closes at 20:00 GMT+7.
+                Automatically triggered every evening at <b>17:00 GMT+7 (5:00 PM WIB)</b> before RSVP
+                closes at 20:00 GMT+7.
               </p>
             </div>
           </div>

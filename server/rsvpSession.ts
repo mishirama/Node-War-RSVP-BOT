@@ -757,6 +757,11 @@ export class RSVPSession {
       } catch (updateErr: any) {
         if (updateErr?.code === 10062) {
           log('DEBUG', 'Fast-path interaction token expired (10062); will update via channel message.');
+        } else if (updateErr?.code === 10008) {
+          log('DEBUG', 'Fast-path interaction message missing (10008); will update via channel message.');
+        } else if (updateErr?.code === 40060) {
+          // Already acknowledged by concurrent event handler or Discord Gateway
+          updatedViaInteraction = true;
         } else {
           log('WARN', `Fast-path interaction.update failed: ${updateErr?.message || updateErr}`);
         }
@@ -766,9 +771,9 @@ export class RSVPSession {
     // Deliver ephemeral confirmation popup
     if (feedback) {
       try {
-        if (updatedViaInteraction || interaction.deferred) {
+        if (updatedViaInteraction || interaction.deferred || interaction.replied) {
           await interaction.followUp({ content: feedback, flags: MessageFlags.Ephemeral });
-        } else if (!interaction.replied) {
+        } else {
           await interaction.reply({ content: feedback, flags: MessageFlags.Ephemeral });
         }
       } catch {

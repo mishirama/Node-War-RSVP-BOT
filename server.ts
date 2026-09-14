@@ -26,7 +26,6 @@ import {
   giveAllMembersAllianceRole,
   getBenchHistory,
   getPriorityBenchUsers,
-  restoreState,
   syncFromDiscord,
 } from './server/bot.js';
 import {

@@ -64,7 +64,29 @@ client.siegeMainMsgId = null;
 client.siegeWaitlistMsgId = null;
 client.siegeSession = null;
 
-let lastPostDate: string | null = null;
+const SCHEDULER_STATE_FILE = path.join(process.cwd(), 'scheduler_state.json');
+
+interface SchedulerState {
+  lastPostDate?: string;
+  lastCloseDate?: string;
+}
+
+function loadSchedulerState(): SchedulerState {
+  try {
+    if (fs.existsSync(SCHEDULER_STATE_FILE)) {
+      return JSON.parse(fs.readFileSync(SCHEDULER_STATE_FILE, 'utf8'));
+    }
+  } catch {}
+  return {};
+}
+
+function saveSchedulerState(state: SchedulerState) {
+  try {
+    fs.writeFileSync(SCHEDULER_STATE_FILE, JSON.stringify(state, null, 2));
+  } catch (err) {
+    log('WARN', `Could not save scheduler state: ${err}`);
+  }
+}
 
 const REMINDER_HISTORY_FILE = path.join(process.cwd(), 'reminder_history.json');
 
@@ -193,6 +215,16 @@ export function getPriorityBenchUsers(): MemberRecord[] {
 export async function postRSVP() {
   const now = moment().tz(JAKARTA_TZ);
   const targetDate = (now.hour() >= 21 ? now.clone().add(1, 'day') : now.clone()).toDate();
+  const targetDateStr = moment(targetDate).format('YYYY-MM-DD');
+
+  // Prevent duplicate post if already active for this target date
+  if (client.currentSession && !client.currentSession.isClosed) {
+    const currentTargetStr = moment(client.currentSession.targetDate).format('YYYY-MM-DD');
+    if (currentTargetStr === targetDateStr && client.mainMsgId) {
+      log('WARN', `Node War RSVP already open for ${targetDateStr} (Message ID: ${client.mainMsgId}). Skipping duplicate post.`);
+      return true;
+    }
+  }
 
   const session = new RSVPSession(client, getLimits(targetDate), targetDate);
   const priorityUsers = getPriorityBenchUsers();
@@ -237,6 +269,17 @@ export async function postRSVP() {
 
 export async function postSiege() {
   const targetDate = moment().tz(JAKARTA_TZ).toDate();
+  const targetDateStr = moment(targetDate).format('YYYY-MM-DD');
+
+  // Prevent duplicate post if already active for this target date
+  if (client.siegeSession && !client.siegeSession.isClosed) {
+    const currentTargetStr = moment(client.siegeSession.targetDate).format('YYYY-MM-DD');
+    if (currentTargetStr === targetDateStr && client.siegeMainMsgId) {
+      log('WARN', `Siege War RSVP already open for ${targetDateStr} (Message ID: ${client.siegeMainMsgId}). Skipping duplicate post.`);
+      return true;
+    }
+  }
+
   const session = new RSVPSession(client, getSiegeLimits(), targetDate, {
     dataFile: SIEGE_DATA_FILE,
     title: 'Siege War RSVP',
@@ -277,6 +320,10 @@ export async function postSiege() {
 export async function closeRSVP(logChannelOverride: any = null) {
   const session: RSVPSession | null = client.currentSession;
   if (!session) return false;
+  if (session.isClosed) {
+    log('INFO', 'Node War RSVP is already closed, skipping duplicate close.');
+    return true;
+  }
   session.isClosed = true;
   recordBenchHistory(session);
 
@@ -319,6 +366,10 @@ export async function closeRSVP(logChannelOverride: any = null) {
 export async function closeSiege() {
   const session: RSVPSession | null = client.siegeSession;
   if (!session) return false;
+  if (session.isClosed) {
+    log('INFO', 'Siege War RSVP is already closed, skipping duplicate close.');
+    return true;
+  }
   session.isClosed = true;
 
   try {
@@ -655,7 +706,7 @@ export async function sendSiegeReminder(customMessage?: string) {
   }
 
   const defaultMsg =
-    '⚔️ **Siege War In-Game Vote & Attendance Reminder**\nPlease **YES UP** at **Balenos Server** at **19:00 GMT+7**!\nMake sure you are geared, on time, and have submitted your vote in-game.';
+    '⚔️ **Siege War In-Game Vote & Attendance Reminder**\nPlease **YES UP** at **Balenos Server** at **17:00 GMT+7**!\nMake sure you are geared, on time, and have submitted your vote in-game.';
 
   const formattedMessage = customMessage?.trim() || defaultMsg;
   const userIdsList = Array.from(registeredUserIds);
@@ -779,13 +830,21 @@ export async function giveAllMembersAllianceRole() {
 let schedulerTimer: NodeJS.Timeout | null = null;
 
 export function startScheduler() {
-  if (schedulerTimer) clearInterval(schedulerTimer);
+  if (schedulerTimer) {
+    clearInterval(schedulerTimer);
+    schedulerTimer = null;
+  }
+
   schedulerTimer = setInterval(async () => {
     const now = moment().tz(JAKARTA_TZ);
     const today = now.format('YYYY-MM-DD');
+    const state = loadSchedulerState();
+
+    // 1. Scheduled Node War RSVP Open at 21:30 GMT+7 (Asia/Jakarta)
     const isOpeningTime = now.hour() * 60 + now.minute() >= 21 * 60 + 30;
-    if (isOpeningTime && lastPostDate !== today) {
-      lastPostDate = now.format('YYYY-MM-DD');
+    if (isOpeningTime && state.lastPostDate !== today) {
+      state.lastPostDate = today;
+      saveSchedulerState(state);
 
       if (now.day() === 5) {
         // Friday -> no node war Saturday
@@ -799,29 +858,47 @@ export function startScheduler() {
             );
           }
         }
-      } else if (!client.currentSession || client.currentSession.isClosed) {
-        await postRSVP();
+      } else {
+        const targetDate = (now.hour() >= 21 ? now.clone().add(1, 'day') : now.clone()).toDate();
+        const targetDateStr = moment(targetDate).format('YYYY-MM-DD');
+        const sessionDateStr = client.currentSession ? moment(client.currentSession.targetDate).format('YYYY-MM-DD') : '';
+
+        if (!client.currentSession || client.currentSession.isClosed || sessionDateStr !== targetDateStr) {
+          log('RSVP', `Auto-triggering scheduled 21:30 Node War RSVP opening for ${targetDateStr}...`);
+          await postRSVP();
+        }
       }
-    } else if (now.hour() === 20 && now.minute() === 0) {
-      await closeRSVP();
     }
 
-    // Automatically send reminder at exactly 17:00 and 19:00 GMT+7 (Asia/Jakarta)
-    const isReminderHour = now.hour() === 17 || now.hour() === 19;
+    // 2. Scheduled Node War RSVP Close at 20:00 GMT+7 (Asia/Jakarta)
+    // Strictly guarded by state.lastCloseDate to prevent repeated execution in the 20:00 minute window
+    const isClosingTime = now.hour() === 20 && now.minute() === 0;
+    if (isClosingTime && state.lastCloseDate !== today) {
+      state.lastCloseDate = today;
+      saveSchedulerState(state);
+
+      if (client.currentSession && !client.currentSession.isClosed) {
+        log('RSVP', 'Auto-triggering scheduled 20:00 Node War RSVP closing...');
+        await closeRSVP();
+      }
+    }
+
+    // 3. Automated In-Game Vote Reminder strictly at 17:00 GMT+7 (Asia/Jakarta)
+    const isReminderHour = now.hour() === 17;
     const isReminderMinute = now.minute() === 0;
 
     if (isReminderHour && isReminderMinute) {
-      const reminderKey = `${today}-${now.hour()}`;
+      const reminderKey = `${today}-17`;
       if (!voteReminderSent.has(reminderKey)) {
         voteReminderSent.add(reminderKey);
         saveReminderHistory(voteReminderSent);
 
         const isSaturday = now.day() === 6;
         if (isSaturday && client.siegeSession && !client.siegeSession.isClosed) {
-          log('REMINDER', `Triggering automated ${now.hour()}:00 GMT+7 Siege War vote reminder (single ping)...`);
+          log('REMINDER', 'Triggering automated 17:00 GMT+7 Siege War vote reminder (single message)...');
           await sendSiegeReminder();
         } else if (client.currentSession && !client.currentSession.isClosed) {
-          log('REMINDER', `Triggering automated ${now.hour()}:00 GMT+7 Node War vote reminder (single ping)...`);
+          log('REMINDER', 'Triggering automated 17:00 GMT+7 Node War vote reminder (single message)...');
           await sendVoteReminder();
         }
       }
@@ -833,8 +910,8 @@ export function startScheduler() {
 client.once(Events.ClientReady, async () => {
   log('INFO', `Discord Bot logged in as ${client.user?.tag}`);
   registerSlashCommands().catch((error) => log('ERROR', `Could not register slash commands: ${error}`));
-  restoreState();
-  restoreState(SIEGE_DATA_FILE, 'siegeSession', 'siege');
+  
+  // Start heartbeat scheduler exactly once when client is ready
   startScheduler();
 
   // Sync state with live Discord messages if active
@@ -871,6 +948,8 @@ client.once(Events.ClientReady, async () => {
   }
 });
 
+const userInteractionLocks = new Map<string, number>();
+
 client.on(Events.InteractionCreate, async (interaction: any) => {
   try {
     if (interaction.isChatInputCommand()) {
@@ -893,6 +972,24 @@ client.on(Events.InteractionCreate, async (interaction: any) => {
     }
 
     if (!interaction.isButton()) return;
+
+    // Debounce rapid user multi-clicking (prevents duplicate fast-path race conditions)
+    const userId = interaction.user.id;
+    const clickNow = Date.now();
+    const lastClick = userInteractionLocks.get(userId) || 0;
+    if (clickNow - lastClick < 1000) {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '⏳ Please wait a moment between actions.',
+          flags: MessageFlags.Ephemeral,
+        }).catch(() => {});
+      }
+      return;
+    }
+    userInteractionLocks.set(userId, clickNow);
+    if (userInteractionLocks.size > 500) {
+      userInteractionLocks.clear();
+    }
 
     const role = CUSTOM_ID_TO_ROLE[interaction.customId];
     if (!role) {
@@ -960,7 +1057,11 @@ client.on(Events.InteractionCreate, async (interaction: any) => {
     }
 
     await session.processRoleSelection(interaction, role);
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === 40060 || error?.code === 10062 || error?.code === 10008) {
+      // Benign Discord interaction acknowledgment or timeout
+      return;
+    }
     log('ERROR', `Interaction failed: ${error}`);
     if (interaction.isChatInputCommand() && (interaction.deferred || interaction.replied)) {
       await interaction.editReply('⚠️ The command could not be completed. Please try again.').catch(() => {});
@@ -1168,7 +1269,10 @@ export async function syncFromDiscord(): Promise<{
             const isClosed = Boolean(
               mainMsg.content?.includes('CLOSED') || mainMsg.embeds[0]?.description?.includes('CLOSED')
             );
-            const targetDateStr = '2026-09-06';
+            const targetDateStr =
+              (client.siegeSession?.targetDate
+                ? moment(client.siegeSession.targetDate).tz(JAKARTA_TZ).format('YYYY-MM-DD')
+                : null) || moment().tz(JAKARTA_TZ).day(6).format('YYYY-MM-DD');
 
             const siegeState = {
               target_date: targetDateStr,
@@ -1210,4 +1314,3 @@ export async function syncFromDiscord(): Promise<{
 // Initial boot restoration even before bot logs in
 restoreState();
 restoreState(SIEGE_DATA_FILE, 'siegeSession', 'siege');
-startScheduler();

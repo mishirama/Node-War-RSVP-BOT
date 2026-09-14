@@ -162,7 +162,7 @@ export const RosterView: React.FC<RosterViewProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customMessage:
-            '⚠️ **Siege War In-Game Vote Reminder**\nPlease **YES UP** at **Balenos Server** at **19:00 GMT+7**!\nMake sure to submit your vote in-game before the deadline.',
+            '⚠️ **Siege War In-Game Vote Reminder**\nPlease **YES UP** at **Balenos Server** at **17:00 GMT+7**!\nMake sure to submit your vote in-game before the deadline.',
         }),
       });
       const resData = await res.json();
@@ -285,10 +285,10 @@ export const RosterView: React.FC<RosterViewProps> = ({
                   onClick={handlePingSiegeReminder}
                   disabled={pingingSiege}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 text-xs font-semibold shadow-sm transition-colors disabled:opacity-50"
-                  title="Ping Balenos Server 19:00 GMT+7 in-game vote reminder to all registered Siege War members"
+                  title="Ping Balenos Server 17:00 GMT+7 in-game vote reminder to all registered Siege War members"
                 >
                   <Bell className="w-3.5 h-3.5 text-amber-400" />
-                  <span>{pingingSiege ? 'Pinging...' : 'Ping Balenos 19:00'}</span>
+                  <span>{pingingSiege ? 'Pinging...' : 'Ping Balenos 17:00'}</span>
                 </button>
               )}
 
